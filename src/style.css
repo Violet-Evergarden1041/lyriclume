@@ -171,6 +171,7 @@
     transition: color .15s, background .15s, transform .15s; -webkit-app-region: no-drag;
   }
   .qql-ctrls button:hover { color: #fff; background: #ffffff16; }
+  .qql-ctrls button > svg { pointer-events: none; }   /* 点击永远落在 button 上 */
   .qql-ctrls button:active { transform: scale(.93); }
   .qql-ctrls .qql-play {
     width: 64px; height: 64px; border-radius: 50%; background: #fff; color: #000;

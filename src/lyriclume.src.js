@@ -497,7 +497,13 @@
       barFill.style.width = pct + '%';
       barKnob.style.left = pct + '%';
     }
-    playBtn.innerHTML = (Spicetify.Player.isPlaying && Spicetify.Player.isPlaying()) ? ICON.pause : ICON.play;
+    const isPlayingNow = !!(Spicetify.Player.isPlaying && Spicetify.Player.isPlaying());
+    // 只在状态变化时替换图标：每帧重建会把 SVG 换掉，
+    // 导致按下瞬间目标元素被销毁，click 事件丢失（表现为「点不动」）
+    if (isPlayingNow !== lastPlayingState) {
+      lastPlayingState = isPlayingNow;
+      playBtn.innerHTML = isPlayingNow ? ICON.pause : ICON.play;
+    }
   }
 
   function loop() {
@@ -675,6 +681,7 @@
      这里临时关掉 transition 是为了滚动跟手，
      但必须在一小段时间后恢复，否则换句时的滚动动画会永久失效 */
   let wheelTimer = 0;
+  let lastPlayingState = null;
 
   bodyEl.addEventListener('wheel', e => {
     e.preventDefault();
