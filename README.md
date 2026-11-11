@@ -1,6 +1,6 @@
 # 译光 · LyricLume
 
-<img src="docs/screenshot.png" width="820" alt="LyricLume 截图">
+<img src="docs/demo.gif" width="620" alt="LyricLume 演示">
 
 **给 Spotify 加上 QQ 音乐级别的逐字歌词和中文翻译。**
 
