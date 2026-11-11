@@ -167,6 +167,10 @@ spicetify apply
 
 ---
 
+## 开发记录
+
+踩坑记录、技术细节、设计取舍都在 [docs/DEVLOG.md](docs/DEVLOG.md)。
+
 ## 致谢
 
 - [Spicetify](https://github.com/spicetify/cli) —— 让这一切成为可能
