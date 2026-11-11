@@ -1,5 +1,7 @@
 # 译光 · LyricLume
 
+[中文](README.md) · [English](README.en.md)
+
 <img src="docs/demo.gif" width="620" alt="LyricLume 演示">
 
 **给 Spotify 加上 QQ 音乐级别的逐字歌词和中文翻译。**
@@ -137,7 +139,11 @@ Spotify 客户端
 
 ```
 lyriclume/
-├─ extension/lyriclume.js   Spotify 扩展（UI + 染色引擎）
+├─ src/
+│  ├─ lyriclume.src.js     扩展源码（CSS 处留 __QQL_CSS__ 占位）
+│  └─ style.css            样式
+├─ tools/build.mjs         构建：把 CSS 内联进源码
+├─ extension/lyriclume.js  构建产物（Spicetify 实际加载的文件）
 ├─ server/
 │  ├─ proxy.mjs            本地 HTTP 代理
 │  ├─ qq.mjs               QQ 音乐搜索 / 歌词 / 匹配
@@ -147,12 +153,15 @@ lyriclume/
 └─ docs/
 ```
 
-改了 `extension/lyriclume.js` 之后：
+**构建 + 安装一条龙：**
 
 ```powershell
+node tools/build.mjs
 Copy-Item .\extension\lyriclume.js "$env:APPDATA\spicetify\Extensions\"
 spicetify apply
 ```
+
+改样式只需要动 `src/style.css`，改逻辑动 `src/lyriclume.src.js`，**不要直接改 `extension/lyriclume.js`**（它每次构建都会被覆盖）。
 
 改了 `server/` 里的东西，重启代理即可。
 
