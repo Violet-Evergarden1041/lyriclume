@@ -526,6 +526,7 @@
     if (opened) return;
     opened = true;
     setOrigin(fromEl);
+    trackEl.style.transition = '';   // 上次滚动可能残留 none
 
     root.style.transition = 'none';
     root.style.clipPath = `circle(0px at ${ox}px ${oy}px)`;
@@ -670,7 +671,11 @@
     barEl.classList.remove('qql-scrub');
   });
 
-  /* 滚轮：方向已反转 */
+  /* 滚轮：方向已反转
+     这里临时关掉 transition 是为了滚动跟手，
+     但必须在一小段时间后恢复，否则换句时的滚动动画会永久失效 */
+  let wheelTimer = 0;
+
   bodyEl.addEventListener('wheel', e => {
     e.preventDefault();
     manual -= e.deltaY;
@@ -678,6 +683,10 @@
     manualUntil = performance.now() + 4000;
     trackEl.style.transition = 'none';
     applyScroll();
+    clearTimeout(wheelTimer);
+    wheelTimer = setTimeout(() => {
+      if (!dragging) trackEl.style.transition = '';
+    }, 260);
   }, { passive: false });
 
   /* 拖拽 */
