@@ -135,18 +135,45 @@ Spotify 客户端
 
 ### Spotify 自动更新后按钮消失了？
 
-Spotify 的自动更新会覆盖 Spicetify 打的补丁，插件随之失效（表现：歌词栏里看不到「译光」按钮）。
+Spotify 每次自动更新都会覆盖 Spicetify 打的补丁，插件随之失效（表现：歌词栏里看不到「译光」按钮，或界面直接报「出错了，请重新加载」）。
 
-执行下面两条即可恢复：
+**恢复步骤：**
 
 ```powershell
-spicetify backup apply   # 新版本 Spotify 首次更新后必须重建备份
-spicetify apply          # 之后每次更新只用这条
+spicetify backup apply   # Spotify 大版本更新后必须重建备份
+spicetify apply          # 小版本更新一般只需要这条
 ```
 
-然后完全退出 Spotify 重新打开。如果你看到界面报「出错了」，在 Spotify 里按 `Ctrl + Shift + R` 强制刷新一次。
+然后完全退出 Spotify（包括托盘）重新打开。如果界面仍报错，在 Spotify 里按 `Ctrl + Shift + R` 强制刷新一次。
 
-> 这条也是为什么按钮只在**有歌词的歌曲**上出现：Spotify 自己对这首歌没有歌词时，歌词栏本身就不存在，插件没有可以挂载的位置。此时按 `Ctrl + Shift + L` 仍可直接打开全屏歌词。
+> 改过扩展代码后也要 `spicetify apply`：Spicetify 是把扩展**复制**进应用目录的，只改源文件不会生效，而且加载有缓存，必须强刷。
+
+### 一劳永逸：关掉 Spotify 自动更新
+
+Spicetify 自带这个开关，关掉之后补丁不会再被覆盖，插件可以长期稳定使用。
+
+```powershell
+spicetify spotify-updates block     # 关闭 Spotify 自动更新
+spicetify spotify-updates unblock   # 需要更新 Spotify 时恢复
+```
+
+代价是 Spotify 不再自动升级。想升级时的正确顺序是：
+
+```powershell
+spicetify spotify-updates unblock
+# 打开 Spotify，等它更新完，再完全退出
+spicetify backup apply
+spicetify spotify-updates block     # 更新完再关掉
+```
+
+### 常见问题
+
+| 现象 | 原因 | 解决 |
+|---|---|---|
+| 歌词栏里没有「译光」按钮 | Spotify 更新把补丁冲掉了 | `spicetify backup apply` |
+| 按钮是灰的，提示「没有这首歌的歌词」 | Spotify 自己对这首歌没歌词，歌词栏不渲染 | 按 `Ctrl + Shift + L` 直接打开全屏歌词 |
+| 界面报「出错了，请重新加载」 | 补丁与新版 Spotify 不匹配 | 先 `spicetify apply`，再 `Ctrl + Shift + R` |
+| 按钮能点但歌词不出来 | 本地代理没起来 | 重开 Spotify，或手动 `node server\proxy.mjs` |
 
 ---
 

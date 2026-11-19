@@ -131,6 +131,44 @@ Spotify client
 - Some tracks have no lyrics or no translation on QQ Music
 - Covers / live versions / instrumentals may match the wrong track
 
+### The button disappeared after a Spotify update
+
+Every Spotify auto-update overwrites Spicetify's patch, so the extension stops loading. Symptoms: no 「译光」 button in the lyrics panel, or the UI shows “Something went wrong”.
+
+```powershell
+spicetify backup apply   # required after a major Spotify update
+spicetify apply          # usually enough for a minor update
+```
+
+Then fully quit Spotify (tray included) and reopen. If the UI still errors, press `Ctrl + Shift + R` inside Spotify to force a refresh.
+
+> This also applies after editing the extension: Spicetify *copies* extensions into the app directory, and the script is cached — change the source, run `apply`, then hard-refresh.
+
+### Stop Spotify from auto-updating (set it and forget it)
+
+```powershell
+spicetify spotify-updates block     # disable Spotify auto-update
+spicetify spotify-updates unblock   # re-enable when you want to update
+```
+
+With updates blocked the patch is never overwritten. When you do want to update:
+
+```powershell
+spicetify spotify-updates unblock
+# let Spotify update, then fully quit it
+spicetify backup apply
+spicetify spotify-updates block
+```
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| No 「译光」 button in the lyrics panel | Spotify update wiped the patch | `spicetify backup apply` |
+| Button is greyed out / “no lyrics for this song” | Spotify has no lyrics for this track, so the panel is not rendered | Press `Ctrl + Shift + L` to open the overlay directly |
+| UI shows “Something went wrong” | Patch incompatible with the new build | `spicetify apply`, then `Ctrl + Shift + R` |
+| Button works but no lyrics appear | Local proxy is not running | Reopen Spotify, or run `node server\proxy.mjs` |
+
 ---
 
 ## Development
