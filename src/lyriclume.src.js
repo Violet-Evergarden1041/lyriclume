@@ -115,11 +115,17 @@
     const sec = document.querySelector('[data-testid="lyrics-npv-section"]');
     if (!sec) return;
 
-    const head = sec.querySelector('.main-nowPlayingView-sectionHeader');
+    // Spotify 每个版本都会重算类名，不能硬依赖 .main-nowPlayingView-sectionHeader。
+    // 先试旧类名，取不到就退回到「section 的第一个 flex 子元素 = 头部」。
+    let head = sec.querySelector('.main-nowPlayingView-sectionHeader');
+    if (!head) {
+      const first = sec.firstElementChild;
+      if (first && getComputedStyle(first).display.indexOf('flex') === 0) head = first;
+    }
     if (!head) return;
 
     const h2 = head.querySelector('h2');
-    const group = [...head.children].find(c => c !== h2);
+    const group = h2 ? [...head.children].find(c => c !== h2) : null;
     const useGroup = !!(group && group.querySelector('button'));
     const targetParent = useGroup ? group : head;
 

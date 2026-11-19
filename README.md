@@ -133,6 +133,21 @@ Spotify 客户端
 - 少部分歌曲 QQ 音乐没有歌词或没有翻译
 - 翻唱 / Live 版 / 纯音乐可能匹配错歌曲
 
+### Spotify 自动更新后按钮消失了？
+
+Spotify 的自动更新会覆盖 Spicetify 打的补丁，插件随之失效（表现：歌词栏里看不到「译光」按钮）。
+
+执行下面两条即可恢复：
+
+```powershell
+spicetify backup apply   # 新版本 Spotify 首次更新后必须重建备份
+spicetify apply          # 之后每次更新只用这条
+```
+
+然后完全退出 Spotify 重新打开。如果你看到界面报「出错了」，在 Spotify 里按 `Ctrl + Shift + R` 强制刷新一次。
+
+> 这条也是为什么按钮只在**有歌词的歌曲**上出现：Spotify 自己对这首歌没有歌词时，歌词栏本身就不存在，插件没有可以挂载的位置。此时按 `Ctrl + Shift + L` 仍可直接打开全屏歌词。
+
 ---
 
 ## 开发
