@@ -64,17 +64,9 @@ async function searchOld(keyword, limit) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// QQ 按请求频率限流，重试只会让情况更糟：这里只发一次请求
 export async function searchSongs(keyword, limit = 8) {
-  // 新接口偶尔会 500（限流），重试一次再退到旧接口
-  for (let i = 0; i < 2; i++) {
-    try {
-      const r = await searchNew(keyword, limit);
-      return r;
-    } catch (e) {
-      if (i === 0) await sleep(500);
-    }
-  }
-  return searchOld(keyword, limit);
+  return searchNew(keyword, limit);
 }
 
 /* ---------------- 原始歌词 ---------------- */
@@ -281,23 +273,25 @@ export async function matchTrack(track) {
   const queries = [];
   const push = q => { const s = String(q || '').trim(); if (s && !queries.includes(s)) queries.push(s); };
   push(`${track.title} ${track.artist}`);
-  push(track.title);
-  if (cleanTitle && cleanTitle !== track.title) push(cleanTitle);
   push(track.artist);
 
   const seen = new Map();
-  for (let round = 0; round < 2; round++) {
+  let okCount = 0;              // 真正成功的搜索次数（0 = 全被限流，不是「歌不存在」）
+  const backoff = [];
+  for (let round = 0; round < 1; round++) {
     for (const q of queries) {
       let list = [];
-      try { list = await searchSongs(q, 10); } catch { list = []; }
+      try { list = await searchSongs(q, 10); okCount++; } catch { list = []; }
       for (const c of list) if (!seen.has(c.songmid)) seen.set(c.songmid, c);
-      if (seen.size >= 24) break;
-      await sleep(250);
+      if (seen.size >= 5) break;   // 第一条查询通常就够，少发请求避免限流
+      await sleep(2500);   // QQ 大概 2 秒 1 次，太快会被限流
     }
-    // 一条都没搜到，多半是被限流了，等一会儿整轮再试一次
     if (seen.size > 0) break;
-    await sleep(1200);
+    if (round < backoff.length) await sleep(backoff[round]);
   }
+
+  // 一次都没搜成功：抛错让上层重试，而不是当成「没有这首歌」
+  if (okCount === 0) throw new Error('QQ 搜索暂时不可用（限流）');
 
   const target = track.durationMs ? track.durationMs / 1000 : 0;
   const scored = [...seen.values()].map(c => {

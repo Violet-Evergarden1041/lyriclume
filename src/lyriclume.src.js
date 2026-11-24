@@ -237,20 +237,56 @@
     const cached = localStorage.getItem(CACHE_PREFIX + uri);
     if (cached) {
       try {
-        current = Object.assign({}, JSON.parse(cached), { uri });
-        buildLyrics();
-        return;
-      } catch (e) {}
+        const c = JSON.parse(cached);
+        const nrm0 = s => (s || '').replace(/\s+/g, '').toLowerCase();
+        const tN0 = nrm0(title);
+        const usable0 = (c.lines || []).filter(ln => {
+          const txt = nrm0((ln.tokens || []).map(t => t.w).join(''));
+          if (!txt) return false;
+          if (tN0.length >= 1 && txt.startsWith(tN0) && txt.length > tN0.length + 4) return false;
+          return true;
+        });
+        if (usable0.length >= 2) {
+          current = Object.assign({}, c, { uri });
+          buildLyrics();
+          return;
+        }
+        localStorage.removeItem(CACHE_PREFIX + uri);   // 坏缓存，丢掉重取
+      } catch (e) {
+        localStorage.removeItem(CACHE_PREFIX + uri);
+      }
     }
 
     setMsg('正在从 QQ 音乐获取歌词…');
     try {
       const q = new URLSearchParams({ track: JSON.stringify({ title, artist, durationMs }) });
-      const m = await fetchRetry(`${PROXY}/match?${q}`).then(r => r.json());
+      const m = await fetchRetry(`${PROXY}/match?${q}`, 2, 2500).then(r => r.json());
       if (!m || !m.best) { setMsg('QQ 音乐没搜到这首歌'); current = null; return; }
 
-      const data = await fetchRetry(`${PROXY}/lyric?mid=${encodeURIComponent(m.best.songmid)}&id=${encodeURIComponent(m.best.songid)}`).then(r => r.json());
-      if (!data || !data.lines || !data.lines.length) { setMsg('这首歌在 QQ 音乐没有歌词'); current = null; return; }
+      // 候选按分数排好序，但排名高的未必有正经歌词（可能是 TV MIX / 伴奏条目），
+      // 所以依次试前几个，谁的有效行够多就用谁
+      const nrm = s => (s || '').replace(/\s+/g, '').toLowerCase();
+      const tN = nrm(title);
+      const usableOf = data => (data && data.lines ? data.lines : []).filter(ln => {
+        const txt = nrm((ln.tokens || []).map(t => t.w).join(''));
+        if (!txt) return false;
+        if (tN.length >= 1 && txt.startsWith(tN) && txt.length > tN.length + 4) return false;
+        return true;
+      });
+
+      const cands = (m.candidates && m.candidates.length ? m.candidates : [m.best]).slice(0, 4);
+      let picked = null;
+      for (const cand of cands) {
+        let data = null;
+        try {
+          const lurl = PROXY + '/lyric?mid=' + encodeURIComponent(cand.songmid) + '&id=' + encodeURIComponent(cand.songid);
+          data = await fetchRetry(lurl).then(r => r.json());
+        } catch (e) { continue; }
+        if (usableOf(data).length >= 2) { picked = { data, cand }; break; }
+      }
+
+      if (!picked) { setMsg('这首歌没有可用的歌词'); current = null; return; }
+      const data = picked.data;
 
       current = Object.assign({}, data, { uri, match: m.best });
       try { localStorage.setItem(CACHE_PREFIX + uri, JSON.stringify(current)); } catch (e) {}
@@ -295,8 +331,8 @@
       if (!txt) return false;
       if (metaDur && ln.t > metaDur + 5000) return false;
       if (txt === tNorm) return false;
-      if (aNorm && txt.includes(tNorm) && txt.includes(aNorm)) return false;
-      if (tNorm && txt.startsWith(tNorm) && txt.length > tNorm.length + 3) return false;   // 歌名 - 歌手
+      if (tNorm.length >= 1 && aNorm && txt.includes(tNorm) && txt.includes(aNorm)) return false;
+      if (tNorm.length >= 1 && txt.startsWith(tNorm) && txt.length > tNorm.length + 3) return false;   // 歌名 - 歌手
       return true;
     };
 
@@ -376,6 +412,8 @@
         tokX: null, tokW: null, chX: null, chW: null, measuredW: -1,
       });
     });
+
+    if (!items.length) { setMsg('这首歌没有可用的歌词'); return; }
 
     rendered = { items, lines, hasTrans };
     activeIdx = -99;
