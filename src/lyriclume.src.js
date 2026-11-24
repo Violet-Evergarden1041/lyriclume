@@ -99,16 +99,36 @@
   let entryEl = null;
   let lastEntryX = null;
 
-  function makeEntry() {
+  function makeEntry(cls = 'qql-entry') {
     const b = document.createElement('button');
-    b.className = 'qql-entry';
+    b.className = cls;
     b.title = `打开 ${APP_NAME}（Ctrl+Shift+L）`;
-    b.innerHTML = `<i></i>${APP_NAME}`;
+    b.textContent = APP_NAME;
     b.addEventListener('click', e => {
       e.stopPropagation();
       open(b);
     });
     return b;
+  }
+
+  /* ---- 播放栏入口：始终可见，不依赖歌词面板 ---- */
+  let barPill = null;
+
+  function injectBarEntry() {
+    const left = document.querySelector('.main-nowPlayingBar-left');
+    if (!left) return;
+
+    let hasTrack = false;
+    try { hasTrack = !!(Spicetify.Player.data && Spicetify.Player.data.item); } catch (e) {}
+    if (!hasTrack) {
+      if (barPill) barPill.style.display = 'none';
+      return;
+    }
+
+    if (!barPill) barPill = makeEntry('qql-pillbar');
+    if (getComputedStyle(left).position === 'static') left.style.position = 'relative';
+    if (barPill.parentElement !== left) left.appendChild(barPill);
+    barPill.style.display = '';
   }
 
   function injectEntry() {
@@ -162,6 +182,96 @@
     lastEntryX = r.left;
   }
 
+  /* ---- 面板歌词：Spotify 没有歌词时接管 ---- */
+  let panelCard = null;
+  let panelBody = null;
+  let lyricState = 'idle';   // ok | instrumental | nomatch | error
+  let panelUri = null;
+
+  const lineText = ln => (ln.tokens || []).map(t => t.w).join('');
+
+  function chineseRatio() {
+    const lines = (current && current.lines) || [];
+    let cjk = 0, total = 0;
+    for (const ln of lines.slice(0, 20)) {
+      for (const ch of lineText(ln)) {
+        if (/\s/.test(ch)) continue;
+        total++;
+        if (/[\u4e00-\u9fff]/.test(ch)) cjk++;
+      }
+    }
+    return total ? cjk / total : 0;
+  }
+
+  function rightAside() {
+    const list = [...document.querySelectorAll('aside')];
+    if (!list.length) return null;
+    return list.sort((a, b) => b.getBoundingClientRect().left - a.getBoundingClientRect().left)[0];
+  }
+
+  function renderPanel() {
+    const aside = rightAside();
+    const spotifyHas = !!document.querySelector('[data-testid="lyrics-npv-section"]');
+    if (!aside || spotifyHas) {
+      if (panelCard) { panelCard.remove(); panelCard = null; panelBody = null; }
+      return;
+    }
+
+    // 接管时自己把歌词拉起来（不用等用户打开全屏）
+    let item = null;
+    try { item = Spicetify.Player.data && Spicetify.Player.data.item; } catch (e) {}
+    const uri = item && item.uri;
+    if (uri && uri !== panelUri) {
+      panelUri = uri;
+      lyricState = 'idle';
+      loadForTrack(item).then(renderPanel).catch(() => {});
+    }
+
+    if (!panelCard || !panelCard.isConnected) {
+      panelCard = document.createElement('div');
+      panelCard.className = 'qql-panel';
+      panelCard.innerHTML = '<div class="qql-panel-head"><span class="qql-panel-title">歌词</span><span class="qql-panel-badge">译光</span></div><div class="qql-panel-body"></div>';
+      const host = aside.firstElementChild;
+      const scroller = host && host.children.length >= 2 ? host.children[1] : null;
+      // 滚动容器是 row flex，里面第一块才是内容列，卡片要塞进内容列里
+      let col = null;
+      if (scroller) {
+        col = [...scroller.children].find(x => !/os-scrollbar/.test(x.className));
+      }
+      const target = col || scroller || host || aside;
+      target.insertBefore(panelCard, target.firstChild);
+      panelBody = panelCard.querySelector('.qql-panel-body');
+    }
+
+    const lines = (current && current.lines) || [];
+    if (!lines.length) {
+      const txt = lyricState === 'instrumental' ? '此音乐为纯音乐'
+        : lyricState === 'nomatch' ? '没有找到这首歌的歌词'
+          : lyricState === 'error' ? '歌词加载失败，请检查本地代理'
+            : '正在获取歌词…';
+      panelBody.innerHTML = '<div class="qql-panel-empty">' + txt + '</div>';
+      return;
+    }
+
+    const zhOnly = chineseRatio() > 0.5;
+    const frag = document.createDocumentFragment();
+    for (const ln of lines) {
+      const o = document.createElement('div');
+      o.className = 'qql-po';
+      o.textContent = lineText(ln);
+      frag.appendChild(o);
+      const tr = (ln.tr || '').trim();
+      if (!zhOnly && tr) {
+        const t = document.createElement('div');
+        t.className = 'qql-pt';
+        t.textContent = tr;
+        frag.appendChild(t);
+      }
+    }
+    panelBody.innerHTML = '';
+    panelBody.appendChild(frag);
+  }
+
   // 面板重新渲染时补回去
   const mo = new MutationObserver(() => {
     if (entryEl && entryEl.isConnected) return;
@@ -169,7 +279,12 @@
     injectEntry._t = setTimeout(injectEntry, 250);
   });
   mo.observe(document.body, { childList: true, subtree: true });
-  setInterval(injectEntry, 1500);
+  setInterval(() => {
+    injectEntry();
+    injectBarEntry();
+    renderPanel();
+  }, 1500);
+  injectBarEntry();
 
   const $ = s => root.querySelector(s);
   const bodyEl = $('.qql-body');
@@ -261,12 +376,13 @@
       bgEl.style.backgroundImage = `url("${img}")`;
     }
 
-    if (!title) { setMsg('未在播放'); return; }
+    if (!title) { setMsg('未在播放'); lyricState = 'idle'; return; }
 
     const cached = localStorage.getItem(CACHE_PREFIX + uri);
     if (cached) {
       try {
         current = Object.assign({}, JSON.parse(cached), { uri });
+        lyricState = (current.lines && current.lines.length) ? 'ok' : 'instrumental';
         buildLyrics();
         return;
       } catch (e) {}
@@ -276,16 +392,18 @@
     try {
       const q = new URLSearchParams({ track: JSON.stringify({ title, artist, durationMs }) });
       const m = await fetchRetry(`${PROXY}/match?${q}`).then(r => r.json());
-      if (!m || !m.best) { setMsg('QQ 音乐没搜到这首歌'); return; }
+      if (!m || !m.best) { setMsg('QQ 音乐没搜到这首歌'); lyricState = 'nomatch'; current = null; return; }
 
       const data = await fetchRetry(`${PROXY}/lyric?mid=${encodeURIComponent(m.best.songmid)}&id=${encodeURIComponent(m.best.songid)}`).then(r => r.json());
-      if (!data || !data.lines || !data.lines.length) { setMsg('这首歌在 QQ 音乐没有歌词'); return; }
+      if (!data || !data.lines || !data.lines.length) { setMsg('这首歌在 QQ 音乐没有歌词'); lyricState = 'instrumental'; current = null; return; }
 
       current = Object.assign({}, data, { uri, match: m.best });
+      lyricState = 'ok';
       try { localStorage.setItem(CACHE_PREFIX + uri, JSON.stringify(current)); } catch (e) {}
       buildLyrics();
     } catch (e) {
       setMsg('拿不到歌词<br><span style="font-size:11px;color:#666">本地代理没启动？<br>' + PROXY + '</span>');
+      lyricState = 'error';
     }
   }
 
@@ -742,9 +860,8 @@
 
   if (Spicetify.Player.addEventListener) {
     Spicetify.Player.addEventListener('songchange', () => {
-      if (!opened) return;
       const item = Spicetify.Player.data && Spicetify.Player.data.item;
-      if (item) loadForTrack(item);
+      if (item) loadForTrack(item).then(renderPanel).catch(() => {});
     });
     Spicetify.Player.addEventListener('onplaypause', () => {
       if (opened) updateFrame(nowMs(), true);
