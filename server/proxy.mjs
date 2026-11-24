@@ -66,7 +66,13 @@ const server = http.createServer(async (req, res) => {
 
     if (u.pathname === '/match') {
       const track = JSON.parse(u.searchParams.get('track') || '{}');
+      const key = 'm:' + (track.title || '') + '|' + (track.artist || '') + '|' + (track.durationMs || 0);
+      if (cache.has(key)) return json(res, 200, cache.get(key));
       const m = await matchTrack(track);
+      if (m && m.best) {          // 只缓存成功结果，失败的下次还要重试
+        if (cache.size > CACHE_MAX) cache.clear();
+        cache.set(key, m);
+      }
       return json(res, 200, m);
     }
 

@@ -412,6 +412,29 @@
   }
 
   function updateFrame(t, force) {
+    // 播放图标放在最前面：即使后面任何一步抛错，图标也能正确刷新
+    try {
+      const isPlayingNow = !!(Spicetify.Player.isPlaying && Spicetify.Player.isPlaying());
+      // 只在状态变化时替换图标：每帧重建会把 SVG 换掉，
+      // 导致按下瞬间目标元素被销毁，click 事件丢失（表现为「点不动」）
+      if (isPlayingNow !== lastPlayingState) {
+        lastPlayingState = isPlayingNow;
+        playBtn.innerHTML = isPlayingNow ? ICON.pause : ICON.play;
+      }
+    } catch (e) {}
+
+    // 进度条
+    try {
+      const dur = Spicetify.Player.getDuration ? Spicetify.Player.getDuration() : 0;
+      durEl.textContent = fmt(dur);
+      if (!scrubbing) {
+        const pct = dur ? Math.min(100, (t / dur) * 100) : 0;
+        curEl.textContent = fmt(t);
+        barFill.style.width = pct + '%';
+        barKnob.style.left = pct + '%';
+      }
+    } catch (e) {}
+
     if (!rendered) return;
     const { items, lines } = rendered;
 
@@ -464,22 +487,6 @@
           it.tFill.style.setProperty('--qql-x', ((it.chX[ci] || 0) + (it.chW[ci] || 0) * cf) + 'px');
         }
       }
-    }
-
-    const dur = Spicetify.Player.getDuration ? Spicetify.Player.getDuration() : 0;
-    durEl.textContent = fmt(dur);
-    if (!scrubbing) {
-      const pct = dur ? Math.min(100, (t / dur) * 100) : 0;
-      curEl.textContent = fmt(t);
-      barFill.style.width = pct + '%';
-      barKnob.style.left = pct + '%';
-    }
-    const isPlayingNow = !!(Spicetify.Player.isPlaying && Spicetify.Player.isPlaying());
-    // 只在状态变化时替换图标：每帧重建会把 SVG 换掉，
-    // 导致按下瞬间目标元素被销毁，click 事件丢失（表现为「点不动」）
-    if (isPlayingNow !== lastPlayingState) {
-      lastPlayingState = isPlayingNow;
-      playBtn.innerHTML = isPlayingNow ? ICON.pause : ICON.play;
     }
   }
 
@@ -662,6 +669,7 @@
 
   bodyEl.addEventListener('wheel', e => {
     e.preventDefault();
+    if (!rendered) return;   // 没有歌词时不允许滚动
     manual -= e.deltaY;
     manual = Math.max(-3000, Math.min(3000, manual));
     manualUntil = performance.now() + 4000;

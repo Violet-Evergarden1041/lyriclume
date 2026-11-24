@@ -12,11 +12,41 @@ const HDR = {
 };
 
 const SEARCH_URL = 'https://c.y.qq.com/soso/fcgi-bin/client_search_cp';
+const MUSICU_URL = 'https://u.y.qq.com/cgi-bin/musicu.fcg';
 const LYRIC_URL = 'https://u.y.qq.com/cgi-bin/musicu.fcg';
 
 /* ---------------- 搜索 ---------------- */
 
-export async function searchSongs(keyword, limit = 8) {
+/** 新版搜索接口（musicu），返回结构 req.data.body.song.list */
+async function searchNew(keyword, limit) {
+  const body = {
+    comm: { ct: 19, cv: 1859, uin: '0' },
+    req: {
+      method: 'DoSearchForQQMusicDesktop',
+      module: 'music.search.SearchCgiService',
+      param: { num_per_page: limit, page_num: 1, query: keyword, search_type: 0 },
+    },
+  };
+  const res = await fetch(MUSICU_URL, {
+    method: 'POST',
+    headers: { ...HDR, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`search HTTP ${res.status}`);
+  const j = await res.json();
+  const list = j?.req?.data?.body?.song?.list || [];
+  return list.map(s => ({
+    songmid: s.mid || s.songmid,
+    songid: s.id || s.songid,
+    name: s.name || s.title,
+    artist: (s.singer || []).map(x => x.name).join('/'),
+    album: (s.album && s.album.name) || s.albumname || '',
+    duration: s.interval,
+  })).filter(x => x.songmid);
+}
+
+/** 旧接口，作为兜底 */
+async function searchOld(keyword, limit) {
   const url = `${SEARCH_URL}?p=1&n=${limit}&format=json&w=${encodeURIComponent(keyword)}`;
   const res = await fetch(url, { headers: HDR });
   if (!res.ok) throw new Error(`search HTTP ${res.status}`);
@@ -28,8 +58,23 @@ export async function searchSongs(keyword, limit = 8) {
     name: s.songname,
     artist: (s.singer || []).map(x => x.name).join('/'),
     album: s.albumname,
-    duration: s.interval,          // 秒
+    duration: s.interval,
   }));
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+export async function searchSongs(keyword, limit = 8) {
+  // 新接口偶尔会 500（限流），重试一次再退到旧接口
+  for (let i = 0; i < 2; i++) {
+    try {
+      const r = await searchNew(keyword, limit);
+      return r;
+    } catch (e) {
+      if (i === 0) await sleep(500);
+    }
+  }
+  return searchOld(keyword, limit);
 }
 
 /* ---------------- 原始歌词 ---------------- */
@@ -228,29 +273,46 @@ function similarity(a, b) {
  * 返回 { best, candidates }
  */
 export async function matchTrack(track) {
-  const queries = [
-    `${track.title} ${track.artist}`,
-    `${track.title}`,
-  ];
+  const cleanTitle = String(track.title || '')
+    .replace(/[（(【\[].*?[)）】\]]/g, ' ')
+    .replace(/\b(feat|ft|remaster(ed)?|live|version|edit)\b.*$/i, ' ')
+    .trim();
+
+  const queries = [];
+  const push = q => { const s = String(q || '').trim(); if (s && !queries.includes(s)) queries.push(s); };
+  push(`${track.title} ${track.artist}`);
+  push(track.title);
+  if (cleanTitle && cleanTitle !== track.title) push(cleanTitle);
+  push(track.artist);
 
   const seen = new Map();
-  for (const q of queries) {
-    let list = [];
-    try { list = await searchSongs(q, 10); } catch { list = []; }
-    for (const c of list) if (!seen.has(c.songmid)) seen.set(c.songmid, c);
-    if (seen.size >= 10) break;
+  for (let round = 0; round < 2; round++) {
+    for (const q of queries) {
+      let list = [];
+      try { list = await searchSongs(q, 10); } catch { list = []; }
+      for (const c of list) if (!seen.has(c.songmid)) seen.set(c.songmid, c);
+      if (seen.size >= 24) break;
+      await sleep(250);
+    }
+    // 一条都没搜到，多半是被限流了，等一会儿整轮再试一次
+    if (seen.size > 0) break;
+    await sleep(1200);
   }
 
   const target = track.durationMs ? track.durationMs / 1000 : 0;
   const scored = [...seen.values()].map(c => {
     const dt = target ? Math.abs(c.duration - target) : 0;
-    let score = similarity(c.name, track.title) * 60 + similarity(c.artist, track.artist) * 40;
+    const tSim = similarity(c.name, track.title);
+    const aSim = similarity(c.artist, track.artist);
+    let score = tSim * 60 + aSim * 40;
     if (target) {
       if (dt <= 2) score += 60;
-      else if (dt <= 4) score += 30;
-      else if (dt <= 8) score += 10;
+      else if (dt <= 4) score += 42;
+      else if (dt <= 8) score += 15;
       else score -= 40;
     }
+    // 歌名跨语言（日文名 vs 中文名）时靠「歌手 + 时长」兜底
+    if (target && dt <= 3 && aSim >= 0.6) score = Math.max(score, 88);
     return { ...c, score: Math.round(score), durationDiff: Math.round(dt) };
   }).sort((a, b) => b.score - a.score);
 
