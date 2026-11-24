@@ -284,7 +284,23 @@
     const items = [];
     const hasTrans = lines.some(l => l.tr && l.tr.trim());
 
-    lines.forEach(ln => {
+    // 过滤掉「歌名 - 歌手」这类元信息行，以及时间超出歌曲长度的行
+    const norm = s => (s || '').replace(/\s+/g, '').toLowerCase();
+    let metaDur = 0;
+    try { metaDur = Spicetify.Player.getDuration ? Spicetify.Player.getDuration() : 0; } catch (e) {}
+    const tNorm = norm(titleEl.textContent);
+    const aNorm = norm(subEl.textContent);
+    const keep = ln => {
+      const txt = norm(ln.tokens.map(t => t.w).join(''));
+      if (!txt) return false;
+      if (metaDur && ln.t > metaDur + 5000) return false;
+      if (txt === tNorm) return false;
+      if (aNorm && txt.includes(tNorm) && txt.includes(aNorm)) return false;
+      if (tNorm && txt.startsWith(tNorm) && txt.length > tNorm.length + 3) return false;   // 歌名 - 歌手
+      return true;
+    };
+
+    lines.filter(keep).forEach(ln => {
       const origText = ln.tokens.map(t => t.w).join('');
       if (isCreditText(origText) || isCreditText(ln.tr)) return;   // 丢掉版权/来源说明行
 
