@@ -419,7 +419,7 @@
     activeIdx = -99;
     autoOff = 0;
     manual = 0;
-    updateFrame(0, true);
+    requestAnimationFrame(() => { try { updateFrame(nowMs() + settings.offset, true); } catch (e) {} });
   }
 
   function measure(it) {
@@ -580,7 +580,8 @@
     root.style.clipPath = `circle(${maxR}px at ${ox}px ${oy}px)`;
 
     const item = Spicetify.Player.data && Spicetify.Player.data.item;
-    if (item) loadForTrack(item);
+    // 延后到下一帧：先让展开动画拿到第一帧，避免点击瞬间卡住
+    setTimeout(() => { if (opened && item) loadForTrack(item); }, 24);
     lastProg = -1;
     rafId = requestAnimationFrame(loop);
 
