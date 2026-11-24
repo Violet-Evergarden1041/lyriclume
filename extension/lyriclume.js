@@ -32,7 +32,7 @@
   );
   const saveSettings = () => localStorage.setItem(LS_KEY, JSON.stringify(settings));
 
-  const css = "\n  .qql-entry {\n    display: inline-flex; align-items: center; gap: 6px;\n    height: 26px; padding: 0 10px; margin-right: 8px;\n    border-radius: 13px; border: 1px solid rgba(30,215,96,.55);\n    background: rgba(30,215,96,.15); color: #1ed760;\n    font-size: 11.5px; font-weight: 700; font-family: inherit;\n    cursor: pointer; white-space: nowrap; -webkit-app-region: no-drag;\n    transition: background .18s, border-color .18s;\n    will-change: transform;\n  }\n  .qql-entry:hover { background: rgba(30,215,96,.3); border-color: #1ed760; }\n\n  /* 播放栏入口：扁平长椭圆「译光」 */\n  .qql-pillbar {\n    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);\n    height: 31px; padding: 0 16px; margin: 0; gap: 0;\n    border-radius: 16px; border: 1.5px solid rgba(30,215,96,.85);\n    background: #121214; color: #1ed760;\n    font-family: inherit; font-size: 15px; font-weight: 700; letter-spacing: .5px;\n    display: inline-flex; align-items: center; justify-content: center;\n    cursor: pointer; white-space: nowrap; z-index: 4;\n    -webkit-app-region: no-drag;\n    transition: background .18s, transform .18s, border-color .18s;\n  }\n  .qql-pillbar:hover { background: rgba(30,215,96,.16); border-color: #1ed760; transform: translateY(-50%) scale(1.03); }\n\n  /* 面板歌词：Spotify 没有歌词时由插件接管 */\n  .qql-panel {\n    margin: 78px 12px 16px; border-radius: 12px; width: calc(100% - 24px); box-sizing: border-box; align-self: stretch;\n    background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.07);\n    display: flex; flex-direction: column; max-height: 46vh; overflow: hidden;\n  }\n  .qql-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 8px; }\n  .qql-panel-title { font-size: 15px; font-weight: 700; color: #fff; }\n  .qql-panel-badge {\n    font-size: 11px; font-weight: 700; color: #1ed760;\n    border: 1px solid rgba(30,215,96,.75); border-radius: 11px; padding: 2px 9px;\n  }\n  .qql-panel-body { overflow-y: auto; padding: 0 14px 14px; }\n  .qql-po { font-size: 24px; font-weight: 700; color: #fff; line-height: 1.45; margin-top: 12px; }\n  .qql-pt { font-size: 18px; color: #e6e6e6; line-height: 1.45; margin-top: 1px; }\n  .qql-panel-empty { padding: 28px 0 34px; text-align: center; color: #b3b3b3; font-size: 15px; }\n\n  .qql-root {\n    position: fixed !important; inset: 0 !important; z-index: 9999 !important;\n    display: none; background: #07080a !important; color: #fff !important;\n    font-family: \"Segoe UI\",\"PingFang SC\",\"Microsoft YaHei\",system-ui,sans-serif !important;\n    overflow: hidden; user-select: none;\n  }\n  .qql-root.qql-open { display: block !important; }\n  .qql-root * { box-sizing: border-box; }\n\n  .qql-bg {\n    position: absolute; inset: -25%; z-index: 0;\n    background-size: cover; background-position: center;\n    filter: blur(72px) saturate(1.9) brightness(.62);\n    transform: scale(1.15);\n  }\n  .qql-scrim { position: absolute; inset: 0; z-index: 1; background: rgba(0,0,0,.16); }\n\n  .qql-collapse {\n    position: absolute; left: 24px; top: 50px; z-index: 8;\n    width: 56px; height: 56px; border-radius: 50%; border: none;\n    background: #ffffff12; color: #e2e2e2; cursor: pointer;\n    display: grid; place-items: center;\n    transition: background .2s; -webkit-app-region: no-drag;\n  }\n  .qql-collapse:hover { background: #ffffff26; }\n\n  .qql-trans {\n    position: absolute; right: 190px; top: 21px; z-index: 8;\n    width: 52px; height: 52px; border-radius: 50%; border: none;\n    background: #ffffff14; color: #b9b9b9; font-size: 17px; font-weight: 700;\n    cursor: pointer; display: grid; place-items: center; font-family: inherit;\n    transition: background .2s, color .2s; -webkit-app-region: no-drag;\n  }\n  .qql-trans:hover { background: #ffffff26; }\n  .qql-trans.qql-on { background: #1ed760; color: #06240f; }\n\n  .qql-colors {\n    position: absolute; right: 40px; top: 118px; z-index: 8;\n    display: grid; grid-template-columns: repeat(3, 42px); grid-auto-rows: 42px; gap: 14px;\n    -webkit-app-region: no-drag;\n  }\n  .qql-color {\n    width: 42px; height: 42px; border-radius: 50%; border: 3px solid transparent;\n    cursor: pointer; padding: 0; transition: transform .15s, border-color .15s;\n  }\n  .qql-color:hover { transform: scale(1.1); }\n  .qql-color.qql-on { border-color: #fff; }\n\n  .qql-head {\n    position: absolute; left: 24px; top: 140px; z-index: 4;\n    display: flex; align-items: flex-start; gap: 18px;\n    transition: top .45s, left .45s;\n  }\n  .qql-art {\n    width: 155px; height: 155px; border-radius: 8px; flex: none; cursor: pointer;\n    background: linear-gradient(135deg,#2f6b3f,#7ee08a 60%,#f3f7a3);\n    background-size: cover; background-position: center;\n    box-shadow: 0 10px 34px #0009;\n    transition: width .45s cubic-bezier(.25,.85,.25,1),\n                height .45s cubic-bezier(.25,.85,.25,1),\n                border-radius .45s, box-shadow .45s;\n  }\n  .qql-meta { min-width: 0; padding-top: 4px; transition: opacity .28s; }\n  .qql-title { font-size: 20px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }\n  .qql-sub { font-size: 14.5px; color: #a2a2a2; margin-top: 6px; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n\n  .qql-root.qql-exp .qql-head { left: 16%; top: 24%; }\n  .qql-root.qql-exp .qql-art {\n    width: min(420px, 26vw); height: min(420px, 26vw); border-radius: 10px;\n    box-shadow: 0 30px 80px #000c;\n  }\n  .qql-root.qql-exp .qql-meta { opacity: 0; pointer-events: none; }\n\n  .qql-body {\n    position: absolute; z-index: 3; overflow: hidden; cursor: grab;\n    left: 0; right: 0; top: 12.5%; bottom: 16%;\n    transition: left .45s cubic-bezier(.25,.85,.25,1), right .45s cubic-bezier(.25,.85,.25,1),\n                top .45s, bottom .45s;\n    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 10%, #000 90%, transparent 100%);\n            mask-image: linear-gradient(to bottom, transparent 0, #000 10%, #000 90%, transparent 100%);\n  }\n  .qql-body.qql-drag { cursor: grabbing; }\n  .qql-root.qql-exp .qql-body { left: 50.6%; right: 13.4%; top: 14.6%; bottom: 16.5%; }\n  .qql-stage { height: 100%; transition: transform .45s cubic-bezier(.25,.85,.25,1); transform-origin: center center; }\n  .qql-root.qql-exp .qql-stage { transform: scale(.9); }\n  .qql-track { transition: transform .55s cubic-bezier(.25,.85,.25,1); }\n\n  .qql-line { padding: 10px 0; cursor: pointer; }\n  .qql-row { text-align: center; line-height: 0; }\n  .qql-row-t { margin-top: 9px; }\n  .qql-o, .qql-t { position: relative; display: inline-block; white-space: pre; }\n  .qql-o {\n    font-size: 26px; font-weight: 700; color: #ffffff; line-height: 1.45;\n    transition: font-size .3s cubic-bezier(.25,.85,.25,1), color .3s;\n  }\n  .qql-line.qql-past .qql-o { color: #e0e0e0; }\n  .qql-line.qql-now .qql-o { font-size: 34px; color: #ffffff; }\n  .qql-t {\n    font-size: 20px; font-weight: 500; color: #e6e6e6; line-height: 1.45;\n  }\n  .qql-line.qql-now .qql-t { color: #ffffff; }\n  .qql-line.qql-hasnot .qql-t { display: none; }\n  body:not(.qql-trans-on) .qql-t { display: none; }\n\n  .qql-fill {\n    position: absolute; inset: 0; pointer-events: none;\n    background-image: var(--qql-grad);\n    -webkit-background-clip: text; background-clip: text; color: transparent;\n    clip-path: inset(-35% calc(100% - var(--qql-x, 0px)) -35% 0);\n  }\n  .qql-line.qql-past .qql-fill { opacity: .45; }\n\n  .qql-tip {\n    position: absolute; left: 100%; top: 50%; margin-left: 14px;\n    transform: translateY(-50%);\n    display: flex; align-items: center; gap: 8px;\n    font-size: 12px; font-weight: 600; color: #9a9a9a; background: #ffffff10;\n    padding: 4px 10px 4px 4px; border-radius: 14px; opacity: 0; pointer-events: none;\n    transition: opacity .15s; white-space: nowrap;\n  }\n  .qql-line:hover .qql-tip { opacity: 1; }\n  .qql-jump {\n    pointer-events: auto; width: 24px; height: 24px; border-radius: 50%;\n    border: none; padding: 0; background: #ffffff24; color: #e8e8e8;\n    font-size: 10px; line-height: 1; display: grid; place-items: center;\n    cursor: pointer; transition: background .15s, color .15s;\n  }\n  .qql-jump:hover { background: #1ed760; color: #06240f; }\n\n  .qql-prog {\n    position: absolute; z-index: 6; left: 16%; right: 13.4%; bottom: 94px;\n    display: flex; align-items: center; gap: 14px;\n  }\n  .qql-time { font-size: 12px; color: #a2a2a2; font-variant-numeric: tabular-nums; min-width: 42px; }\n  .qql-time.qql-dur { text-align: right; }\n  .qql-bar { flex: 1; height: 5px; background: #ffffff30; border-radius: 3px; position: relative; cursor: pointer; }\n  .qql-bar > i { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: #fff; border-radius: 3px; }\n  .qql-bar::after { content: \"\"; position: absolute; inset: -9px 0; }\n  .qql-bar > b {\n    position: absolute; top: 50%; left: 0; width: 14px; height: 14px;\n    margin: -7px 0 0 -7px; border-radius: 50%; background: #fff;\n    box-shadow: 0 2px 8px #000a; opacity: 0; transition: opacity .12s;\n    pointer-events: none;\n  }\n  .qql-prog:hover .qql-bar > b, .qql-bar.qql-scrub > b { opacity: 1; }\n\n  .qql-ctrls {\n    position: absolute; z-index: 6; left: 0; right: 0; bottom: 16px;\n    display: flex; align-items: center; justify-content: center; gap: 40px;\n  }\n  .qql-ctrls button {\n    background: none; border: none; cursor: pointer; color: #e0e0e0;\n    padding: 8px; border-radius: 50%; line-height: 0;\n    transition: color .15s, background .15s, transform .15s; -webkit-app-region: no-drag;\n  }\n  .qql-ctrls button:hover { color: #fff; background: #ffffff16; }\n  .qql-ctrls button > svg { pointer-events: none; }   /* 点击永远落在 button 上 */\n  .qql-ctrls button:active { transform: scale(.93); }\n  .qql-ctrls .qql-play {\n    width: 64px; height: 64px; border-radius: 50%; background: #fff; color: #000;\n    display: grid; place-items: center;\n  }\n  .qql-ctrls .qql-on { color: #1ed760; }\n\n  .qql-volpop {\n    position: absolute; z-index: 20;\n    width: 62px; padding: 16px 0 12px; border-radius: 12px;\n    background: #1c1c1e; box-shadow: 0 16px 44px #000b;\n    display: none; flex-direction: column; align-items: center; gap: 10px;\n  }\n  .qql-volpop.qql-show { display: flex; }\n  .qql-volpop::after {\n    content: \"\"; position: absolute; bottom: -7px; left: 50%; margin-left: -7px;\n    width: 14px; height: 14px; background: #1c1c1e; transform: rotate(45deg);\n  }\n  .qql-voltrack {\n    position: relative; width: 6px; height: 150px; border-radius: 3px;\n    background: #ffffff2e; cursor: pointer;\n  }\n  .qql-voltrack > i {\n    position: absolute; left: 0; right: 0; bottom: 0; height: 70%;\n    background: #fff; border-radius: 3px;\n  }\n  .qql-voltrack > b {\n    position: absolute; left: 50%; width: 12px; height: 12px; margin-left: -6px;\n    border-radius: 50%; background: #fff; box-shadow: 0 1px 6px #000a; bottom: 70%; margin-bottom: -6px;\n  }\n  .qql-volnum { font-size: 12px; color: #d0d0d0; font-variant-numeric: tabular-nums; }\n  .qql-volico { color: #8f8f8f; line-height: 0; }\n\n  .qql-msg { text-align: center; color: #8a8a8a; font-size: 13px; line-height: 1.9; padding: 60px 20px; }\n  ";
+  const css = "\n  /* 播放栏入口：扁平长椭圆「译光」 */\n  .qql-pillbar {\n    position: absolute; left: 220px; top: 50%; transform: translateY(-50%);\n    height: 31px; padding: 0 16px; margin: 0; gap: 0;\n    border-radius: 16px; border: 1.5px solid rgba(30,215,96,.85);\n    background: #121214; color: #1ed760;\n    font-family: inherit; font-size: 15px; font-weight: 700; letter-spacing: .5px;\n    display: inline-flex; align-items: center; justify-content: center;\n    cursor: pointer; white-space: nowrap; z-index: 4;\n    -webkit-app-region: no-drag;\n    transition: background .18s, transform .18s, border-color .18s;\n  }\n  .qql-pillbar:hover { background: rgba(30,215,96,.16); border-color: #1ed760; transform: translateY(-50%) scale(1.03); }\n\n  .qql-root {\n    position: fixed !important; inset: 0 !important; z-index: 9999 !important;\n    display: none; background: #07080a !important; color: #fff !important;\n    font-family: \"Segoe UI\",\"PingFang SC\",\"Microsoft YaHei\",system-ui,sans-serif !important;\n    overflow: hidden; user-select: none;\n  }\n  .qql-root.qql-open { display: block !important; }\n  .qql-root * { box-sizing: border-box; }\n\n  .qql-bg {\n    position: absolute; inset: -25%; z-index: 0;\n    background-size: cover; background-position: center;\n    filter: blur(72px) saturate(1.9) brightness(.62);\n    transform: scale(1.15);\n  }\n  .qql-scrim { position: absolute; inset: 0; z-index: 1; background: rgba(0,0,0,.16); }\n\n  .qql-collapse {\n    position: absolute; left: 24px; top: 50px; z-index: 8;\n    width: 56px; height: 56px; border-radius: 50%; border: none;\n    background: #ffffff12; color: #e2e2e2; cursor: pointer;\n    display: grid; place-items: center;\n    transition: background .2s; -webkit-app-region: no-drag;\n  }\n  .qql-collapse:hover { background: #ffffff26; }\n\n  .qql-trans {\n    position: absolute; right: 190px; top: 21px; z-index: 8;\n    width: 52px; height: 52px; border-radius: 50%; border: none;\n    background: #ffffff14; color: #b9b9b9; font-size: 17px; font-weight: 700;\n    cursor: pointer; display: grid; place-items: center; font-family: inherit;\n    transition: background .2s, color .2s; -webkit-app-region: no-drag;\n  }\n  .qql-trans:hover { background: #ffffff26; }\n  .qql-trans.qql-on { background: #1ed760; color: #06240f; }\n\n  .qql-colors {\n    position: absolute; right: 40px; top: 118px; z-index: 8;\n    display: grid; grid-template-columns: repeat(3, 42px); grid-auto-rows: 42px; gap: 14px;\n    -webkit-app-region: no-drag;\n  }\n  .qql-color {\n    width: 42px; height: 42px; border-radius: 50%; border: 3px solid transparent;\n    cursor: pointer; padding: 0; transition: transform .15s, border-color .15s;\n  }\n  .qql-color:hover { transform: scale(1.1); }\n  .qql-color.qql-on { border-color: #fff; }\n\n  .qql-head {\n    position: absolute; left: 24px; top: 140px; z-index: 4;\n    display: flex; align-items: flex-start; gap: 18px;\n    transition: top .45s, left .45s;\n  }\n  .qql-art {\n    width: 155px; height: 155px; border-radius: 8px; flex: none; cursor: pointer;\n    background: linear-gradient(135deg,#2f6b3f,#7ee08a 60%,#f3f7a3);\n    background-size: cover; background-position: center;\n    box-shadow: 0 10px 34px #0009;\n    transition: width .45s cubic-bezier(.25,.85,.25,1),\n                height .45s cubic-bezier(.25,.85,.25,1),\n                border-radius .45s, box-shadow .45s;\n  }\n  .qql-meta { min-width: 0; padding-top: 4px; transition: opacity .28s; }\n  .qql-title { font-size: 20px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }\n  .qql-sub { font-size: 14.5px; color: #a2a2a2; margin-top: 6px; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n\n  .qql-root.qql-exp .qql-head { left: 16%; top: 24%; }\n  .qql-root.qql-exp .qql-art {\n    width: min(420px, 26vw); height: min(420px, 26vw); border-radius: 10px;\n    box-shadow: 0 30px 80px #000c;\n  }\n  .qql-root.qql-exp .qql-meta { opacity: 0; pointer-events: none; }\n\n  .qql-body {\n    position: absolute; z-index: 3; overflow: hidden; cursor: grab;\n    left: 0; right: 0; top: 12.5%; bottom: 16%;\n    transition: left .45s cubic-bezier(.25,.85,.25,1), right .45s cubic-bezier(.25,.85,.25,1),\n                top .45s, bottom .45s;\n    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 10%, #000 90%, transparent 100%);\n            mask-image: linear-gradient(to bottom, transparent 0, #000 10%, #000 90%, transparent 100%);\n  }\n  .qql-body.qql-drag { cursor: grabbing; }\n  .qql-root.qql-exp .qql-body { left: 50.6%; right: 13.4%; top: 14.6%; bottom: 16.5%; }\n  .qql-stage { height: 100%; transition: transform .45s cubic-bezier(.25,.85,.25,1); transform-origin: center center; }\n  .qql-root.qql-exp .qql-stage { transform: scale(.9); }\n  .qql-track { transition: transform .55s cubic-bezier(.25,.85,.25,1); }\n\n  .qql-line { padding: 10px 0; cursor: pointer; }\n  .qql-row { text-align: center; line-height: 0; }\n  .qql-row-t { margin-top: 9px; }\n  .qql-o, .qql-t { position: relative; display: inline-block; white-space: pre; }\n  .qql-o {\n    font-size: 26px; font-weight: 700; color: #ffffff; line-height: 1.45;\n    transition: font-size .3s cubic-bezier(.25,.85,.25,1), color .3s;\n  }\n  .qql-line.qql-past .qql-o { color: #e0e0e0; }\n  .qql-line.qql-now .qql-o { font-size: 34px; color: #ffffff; }\n  .qql-t {\n    font-size: 20px; font-weight: 500; color: #e6e6e6; line-height: 1.45;\n  }\n  .qql-line.qql-now .qql-t { color: #ffffff; }\n  .qql-line.qql-hasnot .qql-t { display: none; }\n  body:not(.qql-trans-on) .qql-t { display: none; }\n\n  .qql-fill {\n    position: absolute; inset: 0; pointer-events: none;\n    background-image: var(--qql-grad);\n    -webkit-background-clip: text; background-clip: text; color: transparent;\n    clip-path: inset(-35% calc(100% - var(--qql-x, 0px)) -35% 0);\n  }\n  .qql-line.qql-past .qql-fill { opacity: .45; }\n\n  .qql-tip {\n    position: absolute; left: 100%; top: 50%; margin-left: 14px;\n    transform: translateY(-50%);\n    display: flex; align-items: center; gap: 8px;\n    font-size: 12px; font-weight: 600; color: #9a9a9a; background: #ffffff10;\n    padding: 4px 10px 4px 4px; border-radius: 14px; opacity: 0; pointer-events: none;\n    transition: opacity .15s; white-space: nowrap;\n  }\n  .qql-line:hover .qql-tip { opacity: 1; }\n  .qql-jump {\n    pointer-events: auto; width: 24px; height: 24px; border-radius: 50%;\n    border: none; padding: 0; background: #ffffff24; color: #e8e8e8;\n    font-size: 10px; line-height: 1; display: grid; place-items: center;\n    cursor: pointer; transition: background .15s, color .15s;\n  }\n  .qql-jump:hover { background: #1ed760; color: #06240f; }\n\n  .qql-prog {\n    position: absolute; z-index: 6; left: 16%; right: 13.4%; bottom: 94px;\n    display: flex; align-items: center; gap: 14px;\n  }\n  .qql-time { font-size: 12px; color: #a2a2a2; font-variant-numeric: tabular-nums; min-width: 42px; }\n  .qql-time.qql-dur { text-align: right; }\n  .qql-bar { flex: 1; height: 5px; background: #ffffff30; border-radius: 3px; position: relative; cursor: pointer; }\n  .qql-bar > i { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: #fff; border-radius: 3px; }\n  .qql-bar::after { content: \"\"; position: absolute; inset: -9px 0; }\n  .qql-bar > b {\n    position: absolute; top: 50%; left: 0; width: 14px; height: 14px;\n    margin: -7px 0 0 -7px; border-radius: 50%; background: #fff;\n    box-shadow: 0 2px 8px #000a; opacity: 0; transition: opacity .12s;\n    pointer-events: none;\n  }\n  .qql-prog:hover .qql-bar > b, .qql-bar.qql-scrub > b { opacity: 1; }\n\n  .qql-ctrls {\n    position: absolute; z-index: 6; left: 0; right: 0; bottom: 16px;\n    display: flex; align-items: center; justify-content: center; gap: 40px;\n  }\n  .qql-ctrls button {\n    background: none; border: none; cursor: pointer; color: #e0e0e0;\n    padding: 8px; border-radius: 50%; line-height: 0;\n    transition: color .15s, background .15s, transform .15s; -webkit-app-region: no-drag;\n  }\n  .qql-ctrls button:hover { color: #fff; background: #ffffff16; }\n  .qql-ctrls button > svg { pointer-events: none; }   /* 点击永远落在 button 上 */\n  .qql-ctrls button:active { transform: scale(.93); }\n  .qql-ctrls .qql-play {\n    width: 64px; height: 64px; border-radius: 50%; background: #fff; color: #000;\n    display: grid; place-items: center;\n  }\n  .qql-ctrls .qql-on { color: #1ed760; }\n\n  .qql-volpop {\n    position: absolute; z-index: 20;\n    width: 62px; padding: 16px 0 12px; border-radius: 12px;\n    background: #1c1c1e; box-shadow: 0 16px 44px #000b;\n    display: none; flex-direction: column; align-items: center; gap: 10px;\n  }\n  .qql-volpop.qql-show { display: flex; }\n  .qql-volpop::after {\n    content: \"\"; position: absolute; bottom: -7px; left: 50%; margin-left: -7px;\n    width: 14px; height: 14px; background: #1c1c1e; transform: rotate(45deg);\n  }\n  .qql-voltrack {\n    position: relative; width: 6px; height: 150px; border-radius: 3px;\n    background: #ffffff2e; cursor: pointer;\n  }\n  .qql-voltrack > i {\n    position: absolute; left: 0; right: 0; bottom: 0; height: 70%;\n    background: #fff; border-radius: 3px;\n  }\n  .qql-voltrack > b {\n    position: absolute; left: 50%; width: 12px; height: 12px; margin-left: -6px;\n    border-radius: 50%; background: #fff; box-shadow: 0 1px 6px #000a; bottom: 70%; margin-bottom: -6px;\n  }\n  .qql-volnum { font-size: 12px; color: #d0d0d0; font-variant-numeric: tabular-nums; }\n  .qql-volico { color: #8f8f8f; line-height: 0; }\n\n  .qql-msg { text-align: center; color: #8a8a8a; font-size: 13px; line-height: 1.9; padding: 60px 20px; }\n  ";
 
   const styleEl = document.createElement('style');
   styleEl.textContent = css;
@@ -95,13 +95,12 @@
 
   document.body.appendChild(root);
 
-  /* ================= 入口按钮：注入原生歌词栏 ================= */
-  let entryEl = null;
-  let lastEntryX = null;
+  /* ================= 入口按钮：只保留播放栏一个 ================= */
+  let barPill = null;
 
-  function makeEntry(cls = 'qql-entry') {
+  function makeEntry() {
     const b = document.createElement('button');
-    b.className = cls;
+    b.className = 'qql-pillbar';
     b.title = `打开 ${APP_NAME}（Ctrl+Shift+L）`;
     b.textContent = APP_NAME;
     b.addEventListener('click', e => {
@@ -111,9 +110,7 @@
     return b;
   }
 
-  /* ---- 播放栏入口：始终可见，不依赖歌词面板 ---- */
-  let barPill = null;
-
+  /** 按钮紧跟在「歌名 + 勾选」后面，垂直居中 */
   function injectBarEntry() {
     const left = document.querySelector('.main-nowPlayingBar-left');
     if (!left) return;
@@ -125,165 +122,24 @@
       return;
     }
 
-    if (!barPill) barPill = makeEntry('qql-pillbar');
+    if (!barPill) barPill = makeEntry();
     if (getComputedStyle(left).position === 'static') left.style.position = 'relative';
     if (barPill.parentElement !== left) left.appendChild(barPill);
+
+    // 锚点：正在播放组件的最后一个子元素（通常是勾选按钮）
+    const widget = left.querySelector('[data-testid="now-playing-widget-v2"]');
+    const kids = widget ? [...widget.children] : [];
+    const anchor = kids.length ? kids[kids.length - 1] : null;
+    if (anchor) {
+      const lr = left.getBoundingClientRect();
+      const ar = anchor.getBoundingClientRect();
+      barPill.style.left = Math.round(ar.right - lr.left + 12) + 'px';
+      barPill.style.right = 'auto';
+    }
     barPill.style.display = '';
   }
 
-  function injectEntry() {
-    const sec = document.querySelector('[data-testid="lyrics-npv-section"]');
-    if (!sec) return;
-
-    // Spotify 每个版本都会重算类名，不能硬依赖 .main-nowPlayingView-sectionHeader。
-    // 先试旧类名，取不到就退回到「section 的第一个 flex 子元素 = 头部」。
-    let head = sec.querySelector('.main-nowPlayingView-sectionHeader');
-    if (!head) {
-      const first = sec.firstElementChild;
-      if (first && getComputedStyle(first).display.indexOf('flex') === 0) head = first;
-    }
-    if (!head) return;
-
-    const h2 = head.querySelector('h2');
-    const group = h2 ? [...head.children].find(c => c !== h2) : null;
-    const useGroup = !!(group && group.querySelector('button'));
-    const targetParent = useGroup ? group : head;
-
-    // 已经在正确的位置就不动
-    if (entryEl && entryEl.isConnected && entryEl.parentElement === targetParent) return;
-
-    const reuse = entryEl && entryEl.isConnected;
-    if (!reuse) {
-      entryEl = makeEntry();
-      lastEntryX = null;
-    }
-
-    if (useGroup) {
-      group.insertBefore(entryEl, group.firstChild);
-    } else {
-      head.appendChild(entryEl);
-    }
-
-    // FLIP：从上一处位置滑到新位置
-    const r = entryEl.getBoundingClientRect();
-    if (lastEntryX !== null && Math.abs(lastEntryX - r.left) > 2) {
-      const dx = lastEntryX - r.left;
-      entryEl.style.transition = 'none';
-      entryEl.style.transform = `translateX(${dx}px)`;
-      void entryEl.offsetWidth;
-      entryEl.style.transition = 'transform .38s cubic-bezier(.22,1,.36,1)';
-      entryEl.style.transform = 'translateX(0)';
-      setTimeout(() => {
-        if (!entryEl) return;
-        entryEl.style.transition = '';
-        entryEl.style.transform = '';
-      }, 420);
-    }
-    lastEntryX = r.left;
-  }
-
-  /* ---- 面板歌词：Spotify 没有歌词时接管 ---- */
-  let panelCard = null;
-  let panelBody = null;
-  let lyricState = 'idle';   // ok | instrumental | nomatch | error
-  let panelUri = null;
-
-  const lineText = ln => (ln.tokens || []).map(t => t.w).join('');
-
-  function chineseRatio() {
-    const lines = (current && current.lines) || [];
-    let cjk = 0, total = 0;
-    for (const ln of lines.slice(0, 20)) {
-      for (const ch of lineText(ln)) {
-        if (/\s/.test(ch)) continue;
-        total++;
-        if (/[\u4e00-\u9fff]/.test(ch)) cjk++;
-      }
-    }
-    return total ? cjk / total : 0;
-  }
-
-  function rightAside() {
-    const list = [...document.querySelectorAll('aside')];
-    if (!list.length) return null;
-    return list.sort((a, b) => b.getBoundingClientRect().left - a.getBoundingClientRect().left)[0];
-  }
-
-  function renderPanel() {
-    const aside = rightAside();
-    const spotifyHas = !!document.querySelector('[data-testid="lyrics-npv-section"]');
-    if (!aside || spotifyHas) {
-      if (panelCard) { panelCard.remove(); panelCard = null; panelBody = null; }
-      return;
-    }
-
-    // 接管时自己把歌词拉起来（不用等用户打开全屏）
-    let item = null;
-    try { item = Spicetify.Player.data && Spicetify.Player.data.item; } catch (e) {}
-    const uri = item && item.uri;
-    if (uri && uri !== panelUri) {
-      panelUri = uri;
-      lyricState = 'idle';
-      loadForTrack(item).then(renderPanel).catch(() => {});
-    }
-
-    if (!panelCard || !panelCard.isConnected) {
-      panelCard = document.createElement('div');
-      panelCard.className = 'qql-panel';
-      panelCard.innerHTML = '<div class="qql-panel-head"><span class="qql-panel-title">歌词</span><span class="qql-panel-badge">译光</span></div><div class="qql-panel-body"></div>';
-      const host = aside.firstElementChild;
-      const scroller = host && host.children.length >= 2 ? host.children[1] : null;
-      // 滚动容器是 row flex，里面第一块才是内容列，卡片要塞进内容列里
-      let col = null;
-      if (scroller) {
-        col = [...scroller.children].find(x => !/os-scrollbar/.test(x.className));
-      }
-      const target = col || scroller || host || aside;
-      target.insertBefore(panelCard, target.firstChild);
-      panelBody = panelCard.querySelector('.qql-panel-body');
-    }
-
-    const lines = (current && current.lines) || [];
-    if (!lines.length) {
-      const txt = lyricState === 'instrumental' ? '此音乐为纯音乐'
-        : lyricState === 'nomatch' ? '没有找到这首歌的歌词'
-          : lyricState === 'error' ? '歌词加载失败，请检查本地代理'
-            : '正在获取歌词…';
-      panelBody.innerHTML = '<div class="qql-panel-empty">' + txt + '</div>';
-      return;
-    }
-
-    const zhOnly = chineseRatio() > 0.5;
-    const frag = document.createDocumentFragment();
-    for (const ln of lines) {
-      const o = document.createElement('div');
-      o.className = 'qql-po';
-      o.textContent = lineText(ln);
-      frag.appendChild(o);
-      const tr = (ln.tr || '').trim();
-      if (!zhOnly && tr) {
-        const t = document.createElement('div');
-        t.className = 'qql-pt';
-        t.textContent = tr;
-        frag.appendChild(t);
-      }
-    }
-    panelBody.innerHTML = '';
-    panelBody.appendChild(frag);
-  }
-
-  // 面板重新渲染时补回去
-  const mo = new MutationObserver(() => {
-    if (entryEl && entryEl.isConnected) return;
-    clearTimeout(injectEntry._t);
-    injectEntry._t = setTimeout(injectEntry, 250);
-  });
-  mo.observe(document.body, { childList: true, subtree: true });
-  setInterval(() => {
-    injectEntry();
-    injectBarEntry();
-    renderPanel();
-  }, 1500);
+  setInterval(injectBarEntry, 1500);
   injectBarEntry();
 
   const $ = s => root.querySelector(s);
@@ -376,13 +232,12 @@
       bgEl.style.backgroundImage = `url("${img}")`;
     }
 
-    if (!title) { setMsg('未在播放'); lyricState = 'idle'; return; }
+    if (!title) { setMsg('未在播放'); return; }
 
     const cached = localStorage.getItem(CACHE_PREFIX + uri);
     if (cached) {
       try {
         current = Object.assign({}, JSON.parse(cached), { uri });
-        lyricState = (current.lines && current.lines.length) ? 'ok' : 'instrumental';
         buildLyrics();
         return;
       } catch (e) {}
@@ -392,18 +247,16 @@
     try {
       const q = new URLSearchParams({ track: JSON.stringify({ title, artist, durationMs }) });
       const m = await fetchRetry(`${PROXY}/match?${q}`).then(r => r.json());
-      if (!m || !m.best) { setMsg('QQ 音乐没搜到这首歌'); lyricState = 'nomatch'; current = null; return; }
+      if (!m || !m.best) { setMsg('QQ 音乐没搜到这首歌'); current = null; return; }
 
       const data = await fetchRetry(`${PROXY}/lyric?mid=${encodeURIComponent(m.best.songmid)}&id=${encodeURIComponent(m.best.songid)}`).then(r => r.json());
-      if (!data || !data.lines || !data.lines.length) { setMsg('这首歌在 QQ 音乐没有歌词'); lyricState = 'instrumental'; current = null; return; }
+      if (!data || !data.lines || !data.lines.length) { setMsg('这首歌在 QQ 音乐没有歌词'); current = null; return; }
 
       current = Object.assign({}, data, { uri, match: m.best });
-      lyricState = 'ok';
       try { localStorage.setItem(CACHE_PREFIX + uri, JSON.stringify(current)); } catch (e) {}
       buildLyrics();
     } catch (e) {
       setMsg('拿不到歌词<br><span style="font-size:11px;color:#666">本地代理没启动？<br>' + PROXY + '</span>');
-      lyricState = 'error';
     }
   }
 
@@ -861,7 +714,7 @@
   if (Spicetify.Player.addEventListener) {
     Spicetify.Player.addEventListener('songchange', () => {
       const item = Spicetify.Player.data && Spicetify.Player.data.item;
-      if (item) loadForTrack(item).then(renderPanel).catch(() => {});
+      if (item) loadForTrack(item);
     });
     Spicetify.Player.addEventListener('onplaypause', () => {
       if (opened) updateFrame(nowMs(), true);
