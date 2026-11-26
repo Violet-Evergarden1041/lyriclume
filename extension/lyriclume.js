@@ -14,6 +14,80 @@
   const LS_KEY = 'qql.settings.v3';
   const CACHE_PREFIX = 'qql.lyric2.';
 
+  /* ---------- 歌词缓存管理 ----------
+   * localStorage 只有 5~10MB，一首歌大约 10~25KB，
+   * 所以：限制条数（LRU）+ 30 天过期 + 配额满了自动清理。 */
+  const CACHE_MAX = 240;
+  const CACHE_TTL = 30 * 24 * 3600 * 1000;
+
+  function cacheKeys() {
+    const out = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf('qql.lyric') === 0) out.push(k);
+    }
+    return out;
+  }
+
+  function cacheGet(uri) {
+    try {
+      const raw = localStorage.getItem(CACHE_PREFIX + uri);
+      if (!raw) return null;
+      const o = JSON.parse(raw);
+      if (o && o.savedAt && Date.now() - o.savedAt > CACHE_TTL) {
+        localStorage.removeItem(CACHE_PREFIX + uri);
+        return null;
+      }
+      return o;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function cacheHas(uri) {
+    return !!localStorage.getItem(CACHE_PREFIX + uri);
+  }
+
+  /** 清掉 v1 老缓存 + 过期条目；dropCount > 0 时再按时间删掉最旧的一批 */
+  function cacheSweep(dropCount) {
+    const now = Date.now();
+    const alive = [];
+    for (const k of cacheKeys()) {
+      if (k.indexOf(CACHE_PREFIX) !== 0) {     // qql.lyric.* 旧版本，直接删
+        localStorage.removeItem(k);
+        continue;
+      }
+      let t = 0;
+      try { t = (JSON.parse(localStorage.getItem(k)) || {}).savedAt || 0; } catch (e) {}
+      if (t && now - t > CACHE_TTL) { localStorage.removeItem(k); continue; }
+      alive.push({ k, t });
+    }
+    const need = alive.length - CACHE_MAX + (dropCount || 0);
+    if (need > 0) {
+      alive.sort((a, b) => a.t - b.t);
+      for (let i = 0; i < need && i < alive.length; i++) localStorage.removeItem(alive[i].k);
+    }
+  }
+
+  function cacheSet(uri, obj) {
+    const payload = JSON.stringify({
+      savedAt: Date.now(),
+      lines: obj.lines,
+      source: obj.source,
+      hasTrans: obj.hasTrans,
+    });
+    try {
+      localStorage.setItem(CACHE_PREFIX + uri, payload);
+    } catch (e) {
+      // 配额满了：清掉最旧的一半再试一次
+      try {
+        cacheSweep(Math.ceil(CACHE_MAX / 2));
+        localStorage.setItem(CACHE_PREFIX + uri, payload);
+      } catch (e2) { return; }
+    }
+    if (cacheKeys().length > CACHE_MAX) cacheSweep(0);
+  }
+
   const PRESETS = [
     ['#c8ff4d', '#4dd0ff'],
     ['#ffb15a', '#ff5f8f'],
@@ -140,6 +214,7 @@
   }
 
   setInterval(injectBarEntry, 1500);
+  try { cacheSweep(0); } catch (e) {}   // 启动时清 v1 老缓存 + 过期条目
   setTimeout(prefetchQueue, 4000);
   setInterval(prefetchQueue, 5000);   // 队列变化（手动加歌等）也能覆盖
   injectBarEntry();
@@ -236,7 +311,7 @@
 
     if (!title) { setMsg('未在播放'); return; }
 
-    const cached = localStorage.getItem(CACHE_PREFIX + uri);
+    const cached = cacheGet(uri);
     if (cached) {
       try {
         const c = JSON.parse(cached);
@@ -270,7 +345,7 @@
         return;
       }
       current = { lines: data.lines, uri, source: data.source, match: data.match, hasTrans: data.hasTrans };
-      try { localStorage.setItem(CACHE_PREFIX + uri, JSON.stringify(current)); } catch (e) {}
+      cacheSet(uri, current);
       buildLyrics();
     } catch (e) {
       setMsg('无法加载歌词');
@@ -305,15 +380,13 @@
 
     for (const t of list) {
       if (prefetching.has(t.uri)) continue;
-      if (localStorage.getItem(CACHE_PREFIX + t.uri)) continue;
+      if (cacheHas(t.uri)) continue;
       prefetching.add(t.uri);
       try {
         const q = new URLSearchParams({ track: JSON.stringify({ title: t.title, artist: t.artist, durationMs: t.durationMs }) });
         const data = await fetchRetry(`${PROXY}/resolve?${q}`, 1, 800).then(r => r.json());
         if (data && data.source && (data.lines || []).length) {
-          localStorage.setItem(CACHE_PREFIX + t.uri, JSON.stringify({
-            lines: data.lines, uri: t.uri, source: data.source, match: data.match, hasTrans: data.hasTrans,
-          }));
+          cacheSet(t.uri, { lines: data.lines, source: data.source, hasTrans: data.hasTrans });
         }
       } catch (e) { /* 单首失败不影响其他 */ }
       prefetching.delete(t.uri);
