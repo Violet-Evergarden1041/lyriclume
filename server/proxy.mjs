@@ -5,6 +5,7 @@
  */
 import http from 'node:http';
 import { searchSongs, getSongLyrics, matchTrack } from './qq.mjs';
+import { matchNetease, getNeteaseLyrics } from './netease.mjs';
 
 const PORT = 8787;
 const HOST = '127.0.0.1';
@@ -74,6 +75,58 @@ const server = http.createServer(async (req, res) => {
         cache.set(key, m);
       }
       return json(res, 200, m);
+    }
+
+    /* 统一入口：网易云优先，失败再退回 QQ；两边都拿不到就返回空 */
+    if (u.pathname === '/resolve') {
+      const track = JSON.parse(u.searchParams.get('track') || '{}');
+      const key = 'r:' + (track.title || '') + '|' + (track.artist || '') + '|' + (track.durationMs || 0);
+      if (cache.has(key)) return json(res, 200, cache.get(key));
+
+      const usable = lines => (lines || []).filter(l => {
+        const txt = (l.tokens || []).map(t => t.w).join('').trim();
+        return txt.length > 0;
+      });
+
+      let out = { source: null, lines: [], match: null };
+
+      // 1) 网易云
+      try {
+        const m = await matchNetease(track);
+        if (m && m.best) {
+          for (const c of (m.candidates || []).slice(0, 3)) {
+            try {
+              const d = await getNeteaseLyrics(c.id);
+              if (usable(d.lines).length >= 3) {
+                out = { source: 'netease', lines: d.lines, hasTrans: !!d.hasTrans, match: c };
+                break;
+              }
+            } catch (e) { /* 换下一个候选 */ }
+          }
+        }
+      } catch (e) { /* 网易云不可用，走 QQ */ }
+
+      // 2) QQ 音乐兜底
+      if (!out.source) {
+        try {
+          const m = await matchTrack(track);
+          for (const c of ((m && m.candidates) || []).slice(0, 3)) {
+            try {
+              const d = await getSongLyrics(c.songmid, c.songid);
+              if (usable(d.lines).length >= 3) {
+                out = { source: 'qq', lines: d.lines, hasTrans: true, match: c };
+                break;
+              }
+            } catch (e) { /* 换下一个候选 */ }
+          }
+        } catch (e) { /* QQ 也不可用 */ }
+      }
+
+      if (out.source) {
+        if (cache.size > CACHE_MAX) cache.clear();
+        cache.set(key, out);
+      }
+      return json(res, 200, out);
     }
 
     return json(res, 404, { error: 'not found' });

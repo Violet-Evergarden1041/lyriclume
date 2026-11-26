@@ -140,6 +140,8 @@
   }
 
   setInterval(injectBarEntry, 1500);
+  setTimeout(prefetchQueue, 4000);
+  setInterval(prefetchQueue, 30000);   // 队列变化（手动加歌等）也能覆盖
   injectBarEntry();
 
   const $ = s => root.querySelector(s);
@@ -257,42 +259,64 @@
       }
     }
 
-    setMsg('正在从 QQ 音乐获取歌词…');
+    setMsg('正在加载歌词…');
     try {
       const q = new URLSearchParams({ track: JSON.stringify({ title, artist, durationMs }) });
-      const m = await fetchRetry(`${PROXY}/match?${q}`, 2, 2500).then(r => r.json());
-      if (!m || !m.best) { setMsg('QQ 音乐没搜到这首歌'); current = null; return; }
-
-      // 候选按分数排好序，但排名高的未必有正经歌词（可能是 TV MIX / 伴奏条目），
-      // 所以依次试前几个，谁的有效行够多就用谁
-      const nrm = s => (s || '').replace(/\s+/g, '').toLowerCase();
-      const tN = nrm(title);
-      const usableOf = data => (data && data.lines ? data.lines : []).filter(ln => {
-        const txt = nrm((ln.tokens || []).map(t => t.w).join(''));
-        if (!txt) return false;
-        if (tN.length >= 1 && txt.startsWith(tN) && txt.length > tN.length + 4) return false;
-        return true;
-      });
-
-      const cands = (m.candidates && m.candidates.length ? m.candidates : [m.best]).slice(0, 4);
-      let picked = null;
-      for (const cand of cands) {
-        let data = null;
-        try {
-          const lurl = PROXY + '/lyric?mid=' + encodeURIComponent(cand.songmid) + '&id=' + encodeURIComponent(cand.songid);
-          data = await fetchRetry(lurl).then(r => r.json());
-        } catch (e) { continue; }
-        if (usableOf(data).length >= 2) { picked = { data, cand }; break; }
+      // 服务端统一处理：网易云优先，失败自动退回 QQ
+      const data = await fetchRetry(`${PROXY}/resolve?${q}`, 2, 2500).then(r => r.json());
+      if (!data || !data.source || !(data.lines || []).length) {
+        setMsg('无法加载歌词');
+        current = null;
+        return;
       }
-
-      if (!picked) { setMsg('这首歌没有可用的歌词'); current = null; return; }
-      const data = picked.data;
-
-      current = Object.assign({}, data, { uri, match: m.best });
+      current = { lines: data.lines, uri, source: data.source, match: data.match, hasTrans: data.hasTrans };
       try { localStorage.setItem(CACHE_PREFIX + uri, JSON.stringify(current)); } catch (e) {}
       buildLyrics();
     } catch (e) {
-      setMsg('拿不到歌词<br><span style="font-size:11px;color:#666">本地代理没启动？<br>' + PROXY + '</span>');
+      setMsg('无法加载歌词');
+    }
+  }
+
+  /* ---- 预加载：队列里接下来的 9 首 ---- */
+  const prefetching = new Set();
+
+  async function prefetchQueue() {
+    let items = [];
+    try {
+      const q = await Spicetify.Platform.PlayerAPI.getQueue();
+      items = [...(q.nextUp || []), ...(q.queued || [])];
+    } catch (e) {}
+    if (!items.length) {
+      try {
+        const st = Spicetify.Platform.PlayerAPI.getState();
+        items = (st.nextItems || []).map(x => (x && x.item) ? x.item : x).filter(Boolean);
+      } catch (e) {}
+    }
+
+    const list = items.map(it => ({
+      uri: it.uri,
+      title: it.name || (it.metadata && it.metadata.title) || '',
+      artist: (it.artists && it.artists[0] && it.artists[0].name) || (it.metadata && it.metadata.artist_name) || '',
+      durationMs: (it.duration && it.duration.milliseconds) || 0,
+    }))
+      .filter(t => t.uri && t.uri.indexOf('spotify:track:') === 0 && t.title)
+      .slice(0, 9);
+
+    for (const t of list) {
+      if (prefetching.has(t.uri)) continue;
+      if (localStorage.getItem(CACHE_PREFIX + t.uri)) continue;
+      prefetching.add(t.uri);
+      try {
+        const q = new URLSearchParams({ track: JSON.stringify({ title: t.title, artist: t.artist, durationMs: t.durationMs }) });
+        const data = await fetchRetry(`${PROXY}/resolve?${q}`, 1, 800).then(r => r.json());
+        if (data && data.source && (data.lines || []).length) {
+          localStorage.setItem(CACHE_PREFIX + t.uri, JSON.stringify({
+            lines: data.lines, uri: t.uri, source: data.source, match: data.match, hasTrans: data.hasTrans,
+          }));
+        }
+      } catch (e) { /* 单首失败不影响其他 */ }
+      prefetching.delete(t.uri);
+      await new Promise(r => setTimeout(r, 900));   // 放慢，避免被源站限流
     }
   }
 
@@ -778,6 +802,7 @@
     Spicetify.Player.addEventListener('songchange', () => {
       const item = Spicetify.Player.data && Spicetify.Player.data.item;
       if (item) loadForTrack(item);
+      setTimeout(prefetchQueue, 1500);
     });
     Spicetify.Player.addEventListener('onplaypause', () => {
       if (opened) updateFrame(nowMs(), true);
