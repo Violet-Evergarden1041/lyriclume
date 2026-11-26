@@ -12,7 +12,7 @@
 
   const PROXY = 'http://127.0.0.1:8787';
   const LS_KEY = 'qql.settings.v3';
-  const CACHE_PREFIX = 'qql.lyric.';
+  const CACHE_PREFIX = 'qql.lyric2.';
 
   const PRESETS = [
     ['#c8ff4d', '#4dd0ff'],
@@ -141,7 +141,7 @@
 
   setInterval(injectBarEntry, 1500);
   setTimeout(prefetchQueue, 4000);
-  setInterval(prefetchQueue, 30000);   // 队列变化（手动加歌等）也能覆盖
+  setInterval(prefetchQueue, 5000);   // 队列变化（手动加歌等）也能覆盖
   injectBarEntry();
 
   const $ = s => root.querySelector(s);
@@ -279,6 +279,7 @@
 
   /* ---- 预加载：队列里接下来的 9 首 ---- */
   const prefetching = new Set();
+  let lastPrefetchAt = 0;
 
   async function prefetchQueue() {
     let items = [];
@@ -437,7 +438,38 @@
       });
     });
 
-    if (!items.length) { setMsg('这首歌没有可用的歌词'); return; }
+    // 兜底：如果过滤规则把整首歌词都干掉了，就直接显示原始行，别让用户看到空白
+    if (!items.length) {
+      trackEl.innerHTML = '';
+      const rawItems = [];
+      lines.forEach(ln => {
+        const txt = (ln.tokens || []).map(t => t.w).join('');
+        if (!txt.trim()) return;
+        const el = document.createElement('div');
+        el.className = 'qql-line';
+        const o = document.createElement('div');
+        o.className = 'qql-row';
+        const os = document.createElement('span');
+        os.className = 'qql-o';
+        os.textContent = txt;
+        o.appendChild(os);
+        el.appendChild(o);
+        if (ln.tr) {
+          const t2 = document.createElement('div');
+          t2.className = 'qql-row qql-row-t';
+          const ts = document.createElement('span');
+          ts.className = 'qql-t';
+          ts.textContent = ln.tr;
+          t2.appendChild(ts);
+          el.appendChild(t2);
+        }
+        trackEl.appendChild(el);
+        rawItems.push(null);
+      });
+      if (!rawItems.length) { setMsg('无法加载歌词'); return; }
+      rendered = { items: [], lines, hasTrans, raw: true };
+      return;
+    }
 
     rendered = { items, lines, hasTrans };
     activeIdx = -99;
@@ -510,6 +542,14 @@
         curEl.textContent = fmt(t);
         barFill.style.width = pct + '%';
         barKnob.style.left = pct + '%';
+      }
+    } catch (e) {}
+
+    // 快播完了就立刻补拉队列（不用等定时器）
+    try {
+      if (dur && t > 0 && dur - t < 45000 && performance.now() - lastPrefetchAt > 4000) {
+        lastPrefetchAt = performance.now();
+        prefetchQueue();
       }
     } catch (e) {}
 
