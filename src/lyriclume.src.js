@@ -356,6 +356,19 @@
   const prefetching = new Set();
   let lastPrefetchAt = 0;
 
+  // 预加载窗口：开始 10 首；同一个列表连续播放、窗口内全都有缓存后收缩到 5 首
+  const PREFETCH_START = 10;
+  const PREFETCH_MIN = 5;
+  let prefetchDepth = PREFETCH_START;
+  let prefetchSatisfied = 0;
+
+  function currentContextUri() {
+    try {
+      const it = Spicetify.Player.data && Spicetify.Player.data.item;
+      return (it && it.metadata && it.metadata.context_uri) || '';
+    } catch (e) { return ''; }
+  }
+
   async function prefetchQueue() {
     let items = [];
     try {
@@ -376,7 +389,16 @@
       durationMs: (it.duration && it.duration.milliseconds) || 0,
     }))
       .filter(t => t.uri && t.uri.indexOf('spotify:track:') === 0 && t.title)
-      .slice(0, 9);
+      .slice(0, prefetchDepth);
+
+    // 同一个列表里，窗口内已经全部有缓存 → 把窗口从 10 收缩到 5
+    const missing = list.filter(t => !cacheHas(t.uri) && !prefetching.has(t.uri));
+    if (list.length >= 5 && !missing.length) {
+      prefetchSatisfied++;
+      if (prefetchSatisfied >= 2 && prefetchDepth > PREFETCH_MIN) prefetchDepth = PREFETCH_MIN;
+    } else if (missing.length) {
+      prefetchSatisfied = 0;
+    }
 
     for (const t of list) {
       if (prefetching.has(t.uri)) continue;
@@ -915,6 +937,13 @@
     Spicetify.Player.addEventListener('songchange', () => {
       const item = Spicetify.Player.data && Spicetify.Player.data.item;
       if (item) loadForTrack(item);
+      // 换了播放列表就把预加载窗口重置回 10 首
+      const ctx = currentContextUri();
+      if (ctx && ctx !== lastContextUri) {
+        lastContextUri = ctx;
+        prefetchDepth = PREFETCH_START;
+        prefetchSatisfied = 0;
+      }
       setTimeout(prefetchQueue, 1500);
     });
     Spicetify.Player.addEventListener('onplaypause', () => {
