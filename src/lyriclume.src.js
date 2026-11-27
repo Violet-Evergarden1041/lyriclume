@@ -488,7 +488,17 @@
     }
   }
 
-function updateFabs() {
+/** 按钮位置下有弹出层（搜索下拉、账户菜单、对话框）时让路 */
+  function coveredByPopover(x, y) {
+    try {
+      const stack = document.elementsFromPoint(x + 16, y + 16);
+      const i = stack.findIndex(el => el === jumpBtn || (el.closest && el.closest('#qql-jump')));
+      const near = i >= 0 ? stack.slice(i + 1, i + 4) : stack.slice(0, 3);
+      return near.some(el => el && el.closest && el.closest('[role="menu"], [role="listbox"], [role="dialog"], [role="tooltip"]'));
+    } catch (e) { return false; }
+  }
+
+  function updateFabs() {
     ensureFabs();
 
     // 译光面板打开时，这两个按钮要让位
@@ -526,6 +536,24 @@ function updateFabs() {
     topBtn.style.top = Math.round(a.y) + 'px';
     jumpBtn.style.opacity = '1';
     topBtn.style.opacity = a.sc.scrollTop > 80 ? '1' : '.3';
+
+    // 有弹出菜单 / 对话框（搜索下拉、账户菜单、右键菜单）时整体让开
+    const popoverOpen = [...document.querySelectorAll('[role="menu"], [role="dialog"], [role="menuitem"]')]
+      .some(el => { const r = el.getBoundingClientRect(); return r.width > 60 && r.height > 20; });
+
+    // 搜索框获得焦点时（搜索面板展开）也让开
+    const ae = document.activeElement;
+    const aeRole = (ae && ae.getAttribute && ae.getAttribute('role')) || '';
+    const aeLabel = (ae && ae.getAttribute && (ae.getAttribute('placeholder') || ae.getAttribute('aria-label'))) || '';
+    const searchFocused = !!(ae && ae.tagName === 'INPUT'
+      && (aeRole === 'combobox' || aeRole === 'searchbox' || /搜索|search/i.test(aeLabel)));
+
+    if (popoverOpen || searchFocused || coveredByPopover(a.x, a.y) || coveredByPopover(a.x - 40, a.y)) {
+      jumpBtn.style.opacity = '0';
+      topBtn.style.opacity = '0';
+      jumpBtn.style.pointerEvents = 'none';
+      topBtn.style.pointerEvents = 'none';
+    }
     fabPlaced = true;
   }
 
