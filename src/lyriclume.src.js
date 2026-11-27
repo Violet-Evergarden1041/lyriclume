@@ -490,6 +490,17 @@
 
 function updateFabs() {
     ensureFabs();
+
+    // 译光面板打开时，这两个按钮要让位
+    const rootEl = document.querySelector('.qql-root');
+    if (rootEl && rootEl.classList.contains('qql-open')) {
+      jumpBtn.style.opacity = '0';
+      topBtn.style.opacity = '0';
+      jumpBtn.style.pointerEvents = 'none';
+      topBtn.style.pointerEvents = 'none';
+      return;
+    }
+
     const a = fabAnchor();
     if (!a) {
       // 还在列表页、只是顶栏一瞬间没渲染出来：保持原位，避免按钮闪烁导致点不中
