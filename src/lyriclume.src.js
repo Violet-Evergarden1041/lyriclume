@@ -214,6 +214,7 @@
   }
 
   setInterval(injectBarEntry, 1500);
+  setInterval(updateJump, 300);   // 回到正在播放按钮的位置与显隐
   try { cacheSweep(0); } catch (e) {}   // 启动时清 v1 老缓存 + 过期条目
   setTimeout(prefetchQueue, 4000);
   setInterval(prefetchQueue, 5000);   // 队列变化（手动加歌等）也能覆盖
@@ -414,6 +415,159 @@
       prefetching.delete(t.uri);
       await new Promise(r => setTimeout(r, 900));   // 放慢，避免被源站限流
     }
+  }
+
+  /* ================= 回到正在播放 ================= */
+  const JUMP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>';
+
+  let jumpBtn = null;
+  let jumpMode = null;      // null / 'top' / 'stuck'
+  let jumpTimer = 0;
+  let jumpPlaced = false;
+
+  function jumpScrollNode() {
+    const page = document.querySelector('[data-testid="playlist-page"], [data-testid="album-page"]');
+    if (!page) return null;
+    let p = page;
+    for (let i = 0; i < 8 && p; i++) {
+      const s = getComputedStyle(p);
+      if ((s.overflowY === 'auto' || s.overflowY === 'scroll') && p.scrollHeight > p.clientHeight + 50) return p;
+      p = p.parentElement;
+    }
+    return null;
+  }
+
+  function jumpAnchors() {
+    const sc = jumpScrollNode();
+    if (!sc) return null;
+    const stuck = sc.scrollTop > 130;
+
+    if (stuck) {
+      // 吸顶后：贴在顶栏右侧
+      const tb = document.querySelector('[data-testid="topbar-content"]');
+      if (!tb) return null;
+      const r = tb.getBoundingClientRect();
+      if (!r.width) return null;
+      return { sc, stuck, x: r.right - 42, y: r.top + r.height / 2 - 16 };
+    }
+
+    // 顶部：紧跟「下载」按钮之后
+    const row = document.querySelector('[data-testid="action-bar-row"]');
+    if (!row) return null;
+    const rr = row.getBoundingClientRect();
+    if (!rr.width) return null;
+    const btns = [...row.querySelectorAll('button')];
+    const dl = btns.find(b => /下载|Download/i.test(b.getAttribute('aria-label') || b.getAttribute('title') || ''));
+    const x = dl ? dl.getBoundingClientRect().right + 12 : rr.right - 42;
+    return { sc, stuck, x, y: rr.top + rr.height / 2 - 16 };
+  }
+
+  function ensureJumpBtn() {
+    if (jumpBtn && document.body.contains(jumpBtn)) return jumpBtn;
+    jumpBtn = document.createElement('button');
+    jumpBtn.id = 'qql-jump';
+    jumpBtn.type = 'button';
+    jumpBtn.title = '回到正在播放';
+    jumpBtn.innerHTML = JUMP_ICON;
+    jumpBtn.style.opacity = '0';
+    jumpBtn.addEventListener('click', e => { e.stopPropagation(); jumpToPlaying(); });
+    document.body.appendChild(jumpBtn);
+    return jumpBtn;
+  }
+
+  function placeJump(btn, a) {
+    btn.style.left = Math.round(a.x) + 'px';
+    btn.style.top = Math.round(a.y) + 'px';
+  }
+
+  function updateJump() {
+    const btn = ensureJumpBtn();
+    const a = jumpAnchors();
+    if (!a) {
+      btn.style.opacity = '0';
+      btn.style.pointerEvents = 'none';
+      jumpMode = null;
+      jumpPlaced = false;
+      return;
+    }
+    btn.style.pointerEvents = 'auto';
+
+    if (!jumpPlaced) {          // 第一次出现：直接定位并淡入
+      jumpPlaced = true;
+      jumpMode = a.stuck ? 'stuck' : 'top';
+      placeJump(btn, a);
+      btn.style.opacity = '1';
+      return;
+    }
+
+    const mode = a.stuck ? 'stuck' : 'top';
+    if (mode !== jumpMode) {
+      // 位置切换：先淡出，再在新位置淡入
+      jumpMode = mode;
+      btn.style.opacity = '0';
+      clearTimeout(jumpTimer);
+      jumpTimer = setTimeout(() => {
+        const a2 = jumpAnchors();
+        if (a2) placeJump(btn, a2);
+        btn.style.opacity = '1';
+      }, 180);
+    } else if (btn.style.opacity !== '0') {
+      placeJump(btn, a);   // 位置跟随（窗口缩放 / 布局变化）
+    }
+  }
+
+  function currentTrackTitle() {
+    try {
+      const it = Spicetify.Player.data && Spicetify.Player.data.item;
+      return (it && it.metadata && it.metadata.title) || '';
+    } catch (e) { return ''; }
+  }
+
+  function findPlayingRow(sc) {
+    const icon = document.querySelector('[data-testid="playing-icon"], .main-trackList-playingIcon');
+    if (icon) {
+      const r = icon.closest('[role="row"]');
+      if (r) return r;
+    }
+    const title = currentTrackTitle();
+    if (!title) return null;
+    const rows = sc.querySelectorAll('[role="row"]');
+    for (const r of rows) {
+      if (r.getAttribute('aria-rowindex') === '1') continue;
+      if ((r.innerText || '').indexOf(title) >= 0) return r;
+    }
+    return null;
+  }
+
+  function jumpToPlaying() {
+    const sc = jumpScrollNode();
+    if (!sc) return;
+
+    const row = findPlayingRow(sc);
+    if (row) {
+      row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return;
+    }
+
+    // 列表是虚拟滚动的，远处的那一行还没渲染：按曲目序号估算位置
+    let idx = -1;
+    try {
+      const raw = Spicetify.Platform.PlayerAPI.getState().index;
+      if (typeof raw === 'number') idx = raw;
+      else if (raw && typeof raw.itemIndex === 'number') idx = raw.itemIndex;
+    } catch (e) {}
+    if (idx < 0) return;
+
+    const rows = [...sc.querySelectorAll('[role="row"]')].filter(r => r.getAttribute('aria-rowindex') !== '1');
+    if (!rows.length) return;
+    const first = rows[0];
+    // aria-rowindex 从 2 开始（1 是表头），减 2 才是曲目序号
+    const firstIdx = Math.max(0, (+first.getAttribute('aria-rowindex') || 2) - 2);
+    const rowH = first.getBoundingClientRect().height || 56;
+    const scRect = sc.getBoundingClientRect();
+    const absFirst = first.getBoundingClientRect().top - scRect.top + sc.scrollTop;
+    const absTarget = absFirst + (idx - firstIdx) * rowH;
+    sc.scrollTo({ top: Math.max(0, absTarget - sc.clientHeight / 2 + rowH / 2), behavior: 'smooth' });
   }
 
   /* ================= 渲染 ================= */
