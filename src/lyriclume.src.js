@@ -488,10 +488,18 @@
     }
   }
 
-  function updateFabs() {
+function updateFabs() {
     ensureFabs();
     const a = fabAnchor();
     if (!a) {
+      // 还在列表页、只是顶栏一瞬间没渲染出来：保持原位，避免按钮闪烁导致点不中
+      if (fabPlaced && listScrollNode()) {
+        jumpBtn.style.opacity = '1';
+        topBtn.style.opacity = '1';
+        jumpBtn.style.pointerEvents = 'auto';
+        topBtn.style.pointerEvents = 'auto';
+        return;
+      }
       jumpBtn.style.opacity = '0';
       topBtn.style.opacity = '0';
       jumpBtn.style.pointerEvents = 'none';
@@ -506,7 +514,6 @@
     topBtn.style.left = Math.round(a.x - 40) + 'px';
     topBtn.style.top = Math.round(a.y) + 'px';
     jumpBtn.style.opacity = '1';
-    // 已经在顶部时，置顶按钮变暗
     topBtn.style.opacity = a.sc.scrollTop > 80 ? '1' : '.3';
     fabPlaced = true;
   }
@@ -533,9 +540,15 @@
     return null;
   }
 
+  function flashFab(btn) {
+    if (!btn) return;
+    btn.classList.add('qql-fab-nope');
+    setTimeout(() => btn.classList.remove('qql-fab-nope'), 420);
+  }
+
   function jumpToPlaying() {
     const sc = listScrollNode();
-    if (!sc) return;
+    if (!sc) { flashFab(jumpBtn); return; }
 
     const row = findPlayingRow(sc);
     if (row) {
@@ -550,10 +563,10 @@
       if (typeof raw === 'number') idx = raw;
       else if (raw && typeof raw.itemIndex === 'number') idx = raw.itemIndex;
     } catch (e) {}
-    if (idx < 0) return;
+    if (idx < 0) { flashFab(jumpBtn); return; }
 
     const rows = [...sc.querySelectorAll('[role="row"]')].filter(r => r.getAttribute('aria-rowindex') !== '1');
-    if (!rows.length) return;
+    if (!rows.length) { flashFab(jumpBtn); return; }
     const first = rows[0];
     const firstIdx = Math.max(0, (+first.getAttribute('aria-rowindex') || 2) - 2);
     const rowH = first.getBoundingClientRect().height || 56;
