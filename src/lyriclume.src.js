@@ -454,13 +454,13 @@
     if (Math.abs(delta) < 2) return;
     const t0 = performance.now();
     const total = dur || 340;
-    function step(now) {
-      const p = Math.min(1, (now - t0) / total);
+    // 用 setInterval 而不是 requestAnimationFrame：窗口被遮挡时 rAF 不触发，动画永远不动
+    const timer = setInterval(() => {
+      const p = Math.min(1, (performance.now() - t0) / total);
       const e = 1 - Math.pow(1 - p, 3);
       sc.scrollTop = from + delta * e;
-      if (p < 1) requestAnimationFrame(step);
-    }
-    requestAnimationFrame(step);
+      if (p >= 1) clearInterval(timer);
+    }, 16);
   }
 
   function makeFab(id, title, icon, onClick) {
@@ -490,6 +490,7 @@
 
 function updateFabs() {
     ensureFabs();
+    rememberPos();
 
     // 译光面板打开时，这两个按钮要让位
     const rootEl = document.querySelector('.qql-root');
@@ -536,12 +537,64 @@ function updateFabs() {
     } catch (e) { return ''; }
   }
 
+  /* ---- 记住播放位置：重启后没有 index 时用它兜底 ---- */
+  function pageListUri() {
+    const p = location.pathname || '';
+    if (p.indexOf('/playlist/') === 0) return 'spotify:playlist:' + p.split('/')[2];
+    if (p.indexOf('/album/') === 0) return 'spotify:album:' + p.split('/')[2];
+    if (p.indexOf('/collection/tracks') === 0) return 'spotify:collection:tracks';
+    return '';
+  }
+
+  function rememberPos() {
+    try {
+      const st = Spicetify.Platform.PlayerAPI.getState();
+      const raw = st.index;
+      const idx = typeof raw === 'number' ? raw : (raw && raw.itemIndex);
+      const id = currentTrackId();
+      const list = pageListUri();
+      if (typeof idx === 'number' && idx >= 0 && id && list) {
+        localStorage.setItem('qql.pos.' + list + ':' + id, String(idx));
+      }
+    } catch (e) {}
+  }
+
+  function recallPos() {
+    try {
+      const id = currentTrackId();
+      const list = pageListUri();
+      if (!id || !list) return -1;
+      const v = localStorage.getItem('qql.pos.' + list + ':' + id);
+      if (!v) return -1;
+      const n = parseInt(v, 10);
+      return Number.isFinite(n) && n >= 0 ? n : -1;
+    } catch (e) { return -1; }
+  }
+
+  
+function currentTrackId() {
+    try {
+      const uri = (Spicetify.Player.data.item && Spicetify.Player.data.item.uri) || '';
+      return uri.split(':')[2] || '';
+    } catch (e) { return ''; }
+  }
+
+  /** 按 track id 找行：比按歌名匹配可靠（重名、后缀都不会误判） */
+  function findRowByUri(sc) {
+    const id = currentTrackId();
+    if (!id) return null;
+    const a = sc.querySelector('a[href*="' + id + '"]');
+    return a ? a.closest('[role="row"]') : null;
+  }
+
   function findPlayingRow(sc) {
     const icon = document.querySelector('[data-testid="playing-icon"], .main-trackList-playingIcon');
     if (icon) {
       const r = icon.closest('[role="row"]');
       if (r) return r;
     }
+    const byUri = findRowByUri(sc);
+    if (byUri) return byUri;
     const title = currentTrackTitle();
     if (!title) return null;
     for (const r of sc.querySelectorAll('[role="row"]')) {
@@ -557,34 +610,96 @@ function updateFabs() {
     setTimeout(() => btn.classList.remove('qql-fab-nope'), 420);
   }
 
-  function jumpToPlaying() {
+async function scanForTrack(sc, title) {
+    const rowsOf = () => [...sc.querySelectorAll('[role="row"]')].filter(r => r.getAttribute('aria-rowindex') !== '1');
+    const id = currentTrackId();
+    const title2 = title || '';
+    const hit = () => {
+      if (id) {
+        const a = sc.querySelector('a[href*="' + id + '"]');
+        if (a) return a.closest('[role="row"]');
+      }
+      if (!title2) return null;
+      return rowsOf().find(r => (r.innerText || '').indexOf(title2) >= 0);
+    };
+
+    const first = rowsOf()[0];
+    const rowH = first ? (first.getBoundingClientRect().height || 56) : 56;
+    const step = Math.max(rowH, Math.floor(sc.clientHeight * 0.75));
+    const max = Math.max(0, sc.scrollHeight - sc.clientHeight);
+    // 不能用 requestAnimationFrame：窗口不可见时它不触发，会卡死
+    const frame = () => new Promise(r => setTimeout(r, 24));
+    const deadline = performance.now() + 1500;   // 只扫附近，远处靠播放序号
+
+    const origin = sc.scrollTop;
+    let r = hit();
+    if (r) return r;
+
+    // 往下扫
+    let y = origin;
+    let guard = 0;
+    while (y < max && guard++ < 200 && performance.now() < deadline) {
+      const next = Math.min(max, y + step);
+      if (next === y) break;
+      sc.scrollTop = next;
+      await frame();
+      r = hit(); if (r) return r;
+      if (sc.scrollTop === y) break;   // 到底了（Spotify 列表惰性加载，程序化滚动推不动）
+      y = sc.scrollTop;
+    }
+
+    // 再从上往下扫到起点
+    y = 0;
+    guard = 0;
+    while (y < origin && guard++ < 200 && performance.now() < deadline) {
+      sc.scrollTop = y;
+      await frame();
+      r = hit(); if (r) return r;
+      const nxt = sc.scrollTop + step;
+      if (nxt >= origin) break;
+      y = nxt;
+    }
+    return null;
+  }
+
+  async function jumpToPlaying() {
     const sc = listScrollNode();
     if (!sc) { flashFab(jumpBtn); return; }
 
+    // 1) 正在播放的行就在渲染出来的范围内
     const row = findPlayingRow(sc);
-    if (row) {
-      row.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      return;
-    }
+    if (row) { scrollRowToCenter(sc, row); return; }
 
-    // 列表虚拟滚动，远处的行还没渲染：按曲目序号估算
+    // 2) 有播放序号（正在播放时可用）：直接算位置
     let idx = -1;
     try {
       const raw = Spicetify.Platform.PlayerAPI.getState().index;
       if (typeof raw === 'number') idx = raw;
       else if (raw && typeof raw.itemIndex === 'number') idx = raw.itemIndex;
     } catch (e) {}
-    if (idx < 0) { flashFab(jumpBtn); return; }
+    if (idx < 0) idx = recallPos();      // 重启后没有 index：用上次记住的位置
+    if (idx >= 0) {
+      const rows = [...sc.querySelectorAll('[role="row"]')].filter(r => r.getAttribute('aria-rowindex') !== '1');
+      if (rows.length) {
+        const first = rows[0];
+        const firstIdx = Math.max(0, (+first.getAttribute('aria-rowindex') || 2) - 2);
+        const rowH = first.getBoundingClientRect().height || 56;
+        const scRect = sc.getBoundingClientRect();
+        const absFirst = first.getBoundingClientRect().top - scRect.top + sc.scrollTop;
+        const absTarget = absFirst + (idx - firstIdx) * rowH;
+        smoothScrollTo(sc, Math.max(0, absTarget - sc.clientHeight / 2 + rowH / 2));
+        return;
+      }
+    }
 
-    const rows = [...sc.querySelectorAll('[role="row"]')].filter(r => r.getAttribute('aria-rowindex') !== '1');
-    if (!rows.length) { flashFab(jumpBtn); return; }
-    const first = rows[0];
-    const firstIdx = Math.max(0, (+first.getAttribute('aria-rowindex') || 2) - 2);
-    const rowH = first.getBoundingClientRect().height || 56;
-    const scRect = sc.getBoundingClientRect();
-    const absFirst = first.getBoundingClientRect().top - scRect.top + sc.scrollTop;
-    const absTarget = absFirst + (idx - firstIdx) * rowH;
-    smoothScrollTo(sc, Math.max(0, absTarget - sc.clientHeight / 2 + rowH / 2));
+    // 3) 没有序号（例如重启后还没播放）：逐屏扫描，找到为止
+    jumpBtn.style.opacity = '.5';
+    const title = currentTrackTitle();
+    let found = null;
+    if (title) found = await scanForTrack(sc, title);
+    jumpBtn.style.opacity = '1';
+    if (found) scrollRowToCenter(sc, found);
+    else flashFab(jumpBtn);
   }
 
   
