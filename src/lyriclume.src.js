@@ -214,7 +214,7 @@
   }
 
   setInterval(injectBarEntry, 1500);
-  setInterval(updateJump, 300);   // 回到正在播放按钮的位置与显隐
+  setInterval(updateFabs, 300);   // 右上角浮动按钮的位置与显隐
   try { cacheSweep(0); } catch (e) {}   // 启动时清 v1 老缓存 + 过期条目
   setTimeout(prefetchQueue, 4000);
   setInterval(prefetchQueue, 5000);   // 队列变化（手动加歌等）也能覆盖
@@ -417,15 +417,15 @@
     }
   }
 
-  /* ================= 回到正在播放 ================= */
+/* ================= 右上角浮动按钮 ================= */
   const JUMP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>';
+  const TOP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16"/><path d="M12 20V9"/><path d="M6 14l6-6 6 6"/></svg>';
 
   let jumpBtn = null;
-  let jumpMode = null;      // null / 'top' / 'stuck'
-  let jumpTimer = 0;
-  let jumpPlaced = false;
+  let topBtn = null;
+  let fabPlaced = false;
 
-  function jumpScrollNode() {
+  function listScrollNode() {
     const page = document.querySelector('[data-testid="playlist-page"], [data-testid="album-page"]');
     if (!page) return null;
     let p = page;
@@ -437,83 +437,78 @@
     return null;
   }
 
-  function jumpAnchors() {
-    const sc = jumpScrollNode();
+  function fabAnchor() {
+    const sc = listScrollNode();
     if (!sc) return null;
-    const stuck = sc.scrollTop > 130;
+    const tb = document.querySelector('[data-testid="topbar"]');
+    if (!tb) return null;
+    const r = tb.getBoundingClientRect();
+    if (!r.width) return null;
+    return { sc, x: r.right - 42, y: r.top + r.height / 2 - 16 };
+  }
 
-    if (stuck) {
-      // 吸顶后：贴在顶栏右侧
-      const tb = document.querySelector('[data-testid="topbar-content"]');
-      if (!tb) return null;
-      const r = tb.getBoundingClientRect();
-      if (!r.width) return null;
-      return { sc, stuck, x: r.right - 42, y: r.top + r.height / 2 - 16 };
+  /** Spotify 的滚动容器会忽略 scrollTo({behavior:'smooth'})，只能自己补间 */
+  function smoothScrollTo(sc, target, dur) {
+    const from = sc.scrollTop;
+    const delta = target - from;
+    if (Math.abs(delta) < 2) return;
+    const t0 = performance.now();
+    const total = dur || 340;
+    function step(now) {
+      const p = Math.min(1, (now - t0) / total);
+      const e = 1 - Math.pow(1 - p, 3);
+      sc.scrollTop = from + delta * e;
+      if (p < 1) requestAnimationFrame(step);
     }
-
-    // 顶部：紧跟「下载」按钮之后
-    const row = document.querySelector('[data-testid="action-bar-row"]');
-    if (!row) return null;
-    const rr = row.getBoundingClientRect();
-    if (!rr.width) return null;
-    const btns = [...row.querySelectorAll('button')];
-    const dl = btns.find(b => /下载|Download/i.test(b.getAttribute('aria-label') || b.getAttribute('title') || ''));
-    const x = dl ? dl.getBoundingClientRect().right + 12 : rr.right - 42;
-    return { sc, stuck, x, y: rr.top + rr.height / 2 - 16 };
+    requestAnimationFrame(step);
   }
 
-  function ensureJumpBtn() {
-    if (jumpBtn && document.body.contains(jumpBtn)) return jumpBtn;
-    jumpBtn = document.createElement('button');
-    jumpBtn.id = 'qql-jump';
-    jumpBtn.type = 'button';
-    jumpBtn.title = '回到正在播放';
-    jumpBtn.innerHTML = JUMP_ICON;
-    jumpBtn.style.opacity = '0';
-    jumpBtn.addEventListener('click', e => { e.stopPropagation(); jumpToPlaying(); });
-    document.body.appendChild(jumpBtn);
-    return jumpBtn;
+  function makeFab(id, title, icon, onClick) {
+    const b = document.createElement('button');
+    b.id = id;
+    b.type = 'button';
+    b.className = 'qql-fab';
+    b.title = title;
+    b.innerHTML = icon;
+    b.style.opacity = '0';
+    b.addEventListener('click', e => { e.stopPropagation(); onClick(); });
+    document.body.appendChild(b);
+    return b;
   }
 
-  function placeJump(btn, a) {
-    btn.style.left = Math.round(a.x) + 'px';
-    btn.style.top = Math.round(a.y) + 'px';
+  function ensureFabs() {
+    if (!jumpBtn || !document.body.contains(jumpBtn)) {
+      jumpBtn = makeFab('qql-jump', '回到正在播放', JUMP_ICON, () => jumpToPlaying());
+    }
+    if (!topBtn || !document.body.contains(topBtn)) {
+      topBtn = makeFab('qql-top', '回到顶部', TOP_ICON, () => {
+        const sc = listScrollNode();
+        if (sc) smoothScrollTo(sc, 0);
+      });
+    }
   }
 
-  function updateJump() {
-    const btn = ensureJumpBtn();
-    const a = jumpAnchors();
+  function updateFabs() {
+    ensureFabs();
+    const a = fabAnchor();
     if (!a) {
-      btn.style.opacity = '0';
-      btn.style.pointerEvents = 'none';
-      jumpMode = null;
-      jumpPlaced = false;
+      jumpBtn.style.opacity = '0';
+      topBtn.style.opacity = '0';
+      jumpBtn.style.pointerEvents = 'none';
+      topBtn.style.pointerEvents = 'none';
+      fabPlaced = false;
       return;
     }
-    btn.style.pointerEvents = 'auto';
-
-    if (!jumpPlaced) {          // 第一次出现：直接定位并淡入
-      jumpPlaced = true;
-      jumpMode = a.stuck ? 'stuck' : 'top';
-      placeJump(btn, a);
-      btn.style.opacity = '1';
-      return;
-    }
-
-    const mode = a.stuck ? 'stuck' : 'top';
-    if (mode !== jumpMode) {
-      // 位置切换：先淡出，再在新位置淡入
-      jumpMode = mode;
-      btn.style.opacity = '0';
-      clearTimeout(jumpTimer);
-      jumpTimer = setTimeout(() => {
-        const a2 = jumpAnchors();
-        if (a2) placeJump(btn, a2);
-        btn.style.opacity = '1';
-      }, 180);
-    } else if (btn.style.opacity !== '0') {
-      placeJump(btn, a);   // 位置跟随（窗口缩放 / 布局变化）
-    }
+    jumpBtn.style.pointerEvents = 'auto';
+    topBtn.style.pointerEvents = 'auto';
+    jumpBtn.style.left = Math.round(a.x) + 'px';
+    jumpBtn.style.top = Math.round(a.y) + 'px';
+    topBtn.style.left = Math.round(a.x - 40) + 'px';
+    topBtn.style.top = Math.round(a.y) + 'px';
+    jumpBtn.style.opacity = '1';
+    // 已经在顶部时，置顶按钮变暗
+    topBtn.style.opacity = a.sc.scrollTop > 80 ? '1' : '.3';
+    fabPlaced = true;
   }
 
   function currentTrackTitle() {
@@ -531,8 +526,7 @@
     }
     const title = currentTrackTitle();
     if (!title) return null;
-    const rows = sc.querySelectorAll('[role="row"]');
-    for (const r of rows) {
+    for (const r of sc.querySelectorAll('[role="row"]')) {
       if (r.getAttribute('aria-rowindex') === '1') continue;
       if ((r.innerText || '').indexOf(title) >= 0) return r;
     }
@@ -540,7 +534,7 @@
   }
 
   function jumpToPlaying() {
-    const sc = jumpScrollNode();
+    const sc = listScrollNode();
     if (!sc) return;
 
     const row = findPlayingRow(sc);
@@ -549,7 +543,7 @@
       return;
     }
 
-    // 列表是虚拟滚动的，远处的那一行还没渲染：按曲目序号估算位置
+    // 列表虚拟滚动，远处的行还没渲染：按曲目序号估算
     let idx = -1;
     try {
       const raw = Spicetify.Platform.PlayerAPI.getState().index;
@@ -561,15 +555,15 @@
     const rows = [...sc.querySelectorAll('[role="row"]')].filter(r => r.getAttribute('aria-rowindex') !== '1');
     if (!rows.length) return;
     const first = rows[0];
-    // aria-rowindex 从 2 开始（1 是表头），减 2 才是曲目序号
     const firstIdx = Math.max(0, (+first.getAttribute('aria-rowindex') || 2) - 2);
     const rowH = first.getBoundingClientRect().height || 56;
     const scRect = sc.getBoundingClientRect();
     const absFirst = first.getBoundingClientRect().top - scRect.top + sc.scrollTop;
     const absTarget = absFirst + (idx - firstIdx) * rowH;
-    sc.scrollTo({ top: Math.max(0, absTarget - sc.clientHeight / 2 + rowH / 2), behavior: 'smooth' });
+    smoothScrollTo(sc, Math.max(0, absTarget - sc.clientHeight / 2 + rowH / 2));
   }
 
+  
   /* ================= 渲染 ================= */
   function allocate(tokens, n) {
     if (n <= 0) return tokens.map(() => [0, 0]);

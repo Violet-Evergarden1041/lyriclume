@@ -205,8 +205,8 @@
 
   .qql-msg { text-align: center; color: #8a8a8a; font-size: 13px; line-height: 1.9; padding: 60px 20px; }
   
-/* ---------- 回到正在播放 ---------- */
-#qql-jump {
+/* ---------- 右上角浮动按钮 ---------- */
+.qql-fab {
   position: fixed;
   width: 32px;
   height: 32px;
@@ -225,11 +225,11 @@
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
-#qql-jump svg { width: 16px; height: 16px; display: block; }
-#qql-jump:hover {
+.qql-fab svg { width: 16px; height: 16px; display: block; }
+.qql-fab:hover {
   background: rgba(30, 215, 96, .92);
   border-color: rgba(30, 215, 96, 1);
   color: #0b0b0c;
   transform: scale(1.08);
 }
-#qql-jump:active { transform: scale(.96); }
+.qql-fab:active { transform: scale(.96); }
